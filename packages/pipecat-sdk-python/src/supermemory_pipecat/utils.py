@@ -5,7 +5,10 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Union
 
 
-_DYNAMIC_DATE_PREFIX = re.compile(r"^\s*(?:\[Recent\]\s*)?\[\d{4}-\d{2}-\d{2}\]\s*")
+_DYNAMIC_DATE_PREFIX = re.compile(
+    r"^\s*(?:\[Recent\]\s*)?\[\d{4}-\d{2}-\d{2}\]\s*",
+    re.IGNORECASE,
+)
 
 
 def get_last_user_message(messages: List[Dict[str, Any]]) -> str | None:
@@ -91,7 +94,8 @@ def deduplicate_memories(
     def comparison_key(memory: str) -> str:
         # Dynamic profile entries are date-labelled by the API while search
         # results contain the same memory without that presentation prefix.
-        return _DYNAMIC_DATE_PREFIX.sub("", memory.strip())
+        without_prefix = _DYNAMIC_DATE_PREFIX.sub("", memory.strip())
+        return " ".join(without_prefix.split()).casefold()
 
     def unique_strings(memories: List[str]) -> List[str]:
         out: List[str] = []

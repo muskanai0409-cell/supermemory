@@ -359,9 +359,11 @@ class SupermemoryPipecatService(FrameProcessor):
             memories_data: Memory data from Supermemory API.
         """
         profile = memories_data["profile"]
+        include_profile = self.params.mode in ("profile", "full")
+        include_search = self.params.mode in ("query", "full")
         deduplicated = deduplicate_memories(
-            static=profile["static"],
-            dynamic=profile["dynamic"],
+            static=profile["static"] if include_profile else [],
+            dynamic=profile["dynamic"] if include_profile else [],
             search_results=memories_data["search_results"],
         )
 
@@ -373,9 +375,6 @@ class SupermemoryPipecatService(FrameProcessor):
 
         if total_memories == 0:
             return
-
-        include_profile = self.params.mode in ("profile", "full")
-        include_search = self.params.mode in ("query", "full")
 
         memory_text = format_memories_to_text(
             deduplicated,

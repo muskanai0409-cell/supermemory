@@ -5,6 +5,10 @@ import re
 from typing import Any, Optional, Protocol
 
 DEFAULT_CONTEXT_PROMPT = "The following are retrieved memories about the user."
+MEMORY_CONTEXT_PATTERN = re.compile(
+    r'[ \t]*<supermemory context="user-memories" readonly>.*?</supermemory>[ \t]*',
+    re.DOTALL,
+)
 
 
 def wrap_memory_injection(memories: str, context_prompt: str = "") -> str:
@@ -17,6 +21,21 @@ def wrap_memory_injection(memories: str, context_prompt: str = "") -> str:
         f"{memories}\n"
         "</supermemory>"
     )
+
+
+def strip_memory_injection(content: str) -> str:
+    """Remove every context block previously owned by this middleware."""
+    stripped = MEMORY_CONTEXT_PATTERN.sub("", content)
+    return re.sub(r"\n{3,}", "\n\n", stripped).strip()
+
+
+def replace_memory_injection(content: str, memories: str) -> str:
+    """Replace middleware-owned context while preserving caller instructions."""
+    preserved = strip_memory_injection(content)
+    memory_context = wrap_memory_injection(memories) if memories.strip() else ""
+    if not memory_context:
+        return preserved
+    return f"{preserved}\n\n{memory_context}" if preserved else memory_context
 
 
 class Logger(Protocol):
@@ -110,36 +129,40 @@ def deduplicate_memories(
         return None
 
     def comparison_key(memory: str) -> str:
-        """Remove Mono's dynamic-profile date decoration for comparison only."""
-        return re.sub(
+        """Normalize display-only profile decoration for duplicate comparison."""
+        without_prefix = re.sub(
             r"^(?:\[Recent\]\s*)?\[\d{4}-\d{2}-\d{2}\]\s*",
             "",
             memory,
             count=1,
-        ).strip()
+        )
+        return " ".join(without_prefix.strip().split()).casefold()
 
     static_memories: list[str] = []
     seen_memories: set[str] = set()
 
     for item in static_items:
         memory = extract_memory_text(item)
-        if memory is not None:
+        key = comparison_key(memory) if memory is not None else None
+        if memory is not None and key is not None and key not in seen_memories:
             static_memories.append(memory)
-            seen_memories.add(comparison_key(memory))
+            seen_memories.add(key)
 
     dynamic_memories: list[str] = []
     for item in dynamic_items:
         memory = extract_memory_text(item)
-        if memory is not None and comparison_key(memory) not in seen_memories:
+        key = comparison_key(memory) if memory is not None else None
+        if memory is not None and key is not None and key not in seen_memories:
             dynamic_memories.append(memory)
-            seen_memories.add(comparison_key(memory))
+            seen_memories.add(key)
 
     search_memories: list[str] = []
     for item in search_items:
         memory = extract_memory_text(item)
-        if memory is not None and comparison_key(memory) not in seen_memories:
+        key = comparison_key(memory) if memory is not None else None
+        if memory is not None and key is not None and key not in seen_memories:
             search_memories.append(memory)
-            seen_memories.add(comparison_key(memory))
+            seen_memories.add(key)
 
     return DeduplicatedMemories(
         static=static_memories,

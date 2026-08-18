@@ -3,6 +3,7 @@ import {
 	type MiddlewareRuntimeConfig,
 	normalizeMiddlewareConfig,
 } from "./middleware-config"
+import { dedupeProfileForMode } from "./memory-dedupe"
 
 export interface MemoryDebugEntry {
 	type:
@@ -91,17 +92,6 @@ function summarizeProfile(profile: ContainerContext["profile"]) {
 	}
 }
 
-function selectProfileForMode(
-	profile: ContainerContext["profile"],
-	mode: "profile" | "query" | "full",
-): ContainerContext["profile"] {
-	return {
-		static: mode === "query" ? [] : profile.static,
-		dynamic: mode === "query" ? [] : profile.dynamic,
-		searchResults: mode === "profile" ? [] : profile.searchResults,
-	}
-}
-
 function buildContextPreview(
 	profile: ContainerContext["profile"],
 	mode: "profile" | "query" | "full",
@@ -182,7 +172,10 @@ export async function fetchContainerContext(
 	if (!apiKey) throw new Error("Supermemory API key is required")
 
 	const client = getSupermemoryClient(apiKey)
-	const profile = await fetchProfileContext(client, containerTag, query)
+	const profile = dedupeProfileForMode(
+		query ? "full" : "profile",
+		await fetchProfileContext(client, containerTag, query),
+	)
 
 	const docsResponse = await client.post<{
 		documents?: unknown[]
@@ -246,7 +239,7 @@ export async function buildMiddlewareMemoryDebug(
 			query,
 			signal,
 		)
-		const selectedProfile = selectProfileForMode(profile, memoryMode)
+		const selectedProfile = dedupeProfileForMode(memoryMode, profile)
 		const summary = summarizeProfile(selectedProfile)
 
 		return [
@@ -276,6 +269,12 @@ export async function buildMiddlewareMemoryDebug(
 				type: "context_preview",
 				label: "Reconstructed context preview (not middleware capture)",
 				preview: buildContextPreview(selectedProfile, memoryMode, query),
+				detail: {
+					totalFacts:
+						summary.staticCount +
+						summary.dynamicCount +
+						summary.searchResultCount,
+				},
 			},
 			config.addMemory === "always"
 				? {

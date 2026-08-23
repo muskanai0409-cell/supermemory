@@ -110,7 +110,7 @@ Supermemory tools allow AI agents to search, add, inspect, and manage scoped Sup
 
 ```typescript
 import { supermemoryTools } from '@supermemory/ai-sdk'
-import { generateText } from 'ai'
+import { generateText, stepCountIs } from 'ai'
 import { openai } from '@ai-sdk/openai'
 
 const result = await generateText({
@@ -123,7 +123,8 @@ const result = await generateText({
       // Use either projectId OR containerTags, not both.
       containerTags: ['user-123']
     })
-  }
+  },
+  stopWhen: stepCountIs(5)
 })
 ```
 
@@ -133,7 +134,7 @@ const result = await generateText({
 
 ```typescript
 import { supermemoryTools } from '@supermemory/ai-sdk'
-import { generateText } from 'ai'
+import { generateText, stepCountIs } from 'ai'
 import { openai } from '@ai-sdk/openai'
 
 const supermemoryApiKey = process.env.SUPERMEMORY_API_KEY!
@@ -156,6 +157,7 @@ async function chatWithTools(userMessage: string) {
         containerTags: ['my-user-id']
       })
     },
+    stopWhen: stepCountIs(5)
   })
 
   return result.text
@@ -181,7 +183,7 @@ interface SupermemoryToolsConfig {
 }
 ```
 
-`projectId` and `containerTags` are mutually exclusive and empty values are rejected. If neither is provided, v2 uses the explicit scope `sm_project_default`. With multiple `containerTags`, operations that support a union use all configured tags; single-profile operations default to the first tag.
+`projectId` and `containerTags` are mutually exclusive and empty values are rejected. If neither is provided, v2 uses the explicit scope `sm_project_default`. With multiple `containerTags`, add operations attach every configured tag and document list/delete use their union. V4 search, profile, and forget operations use the first configured tag because those APIs are single-space.
 
 In strict mode, fields covered by a strict schema are required or defaulted. For example, `documentDelete.containerTag` must be a string or `null`; pass `null` to use the configured scope.
 
@@ -206,7 +208,7 @@ const tools = supermemoryTools('your-api-key', {
 
 | Aggregate key | Individual creator | Purpose |
 | --- | --- | --- |
-| `searchMemories` | `searchMemoriesTool` | Search stored source documents |
+| `searchMemories` | `searchMemoriesTool` | Search learned memories and source chunks in the primary configured tag |
 | `addMemory` | `addMemoryTool` | Add a short, atomic memory |
 | `getProfile` | `getProfileTool` | Read static/dynamic profile text and optional query results |
 | `documentList` | `documentListTool` | List paginated source-document metadata |
@@ -216,11 +218,15 @@ const tools = supermemoryTools('your-api-key', {
 
 There is no `fetchMemory` or `fetchMemoryTool`. Use `getProfile` for profile memories, `searchMemories` for relevant source content, and `documentList` for source-document IDs and metadata.
 
+`memoryForget` accepts a memory ID from query-backed `getProfile` search results or from a `searchMemories` result containing a `memory` field; chunk and document IDs are not valid. For safety, `documentDelete` refuses documents that are still processing, lack a verifiable non-empty tag set, or contain any tag outside the effective scope.
+
 ### Using Individual Tools
 
 For more flexibility, you can import and use individual tools:
 
 ```typescript
+import { openai } from '@ai-sdk/openai'
+import { generateText, stepCountIs } from 'ai'
 import {
   searchMemoriesTool,
   addMemoryTool,
@@ -241,7 +247,8 @@ const result = await generateText({
   messages: [...],
   tools: {
     searchMemories: searchTool
-  }
+  },
+  stopWhen: stepCountIs(5)
 })
 ```
 

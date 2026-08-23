@@ -1,6 +1,7 @@
 """Utility functions for Supermemory Agent Framework integration."""
 
 import json
+import re
 from typing import Any, Optional, Protocol
 
 DEFAULT_CONTEXT_PROMPT = "The following are retrieved memories about the user."
@@ -96,17 +97,26 @@ def deduplicate_memories(
             trimmed = item.strip()
             return trimmed if trimmed else None
         if isinstance(item, dict):
-            memory = item.get("memory")
-            if isinstance(memory, str):
-                trimmed = memory.strip()
-                return trimmed if trimmed else None
+            for field in ("memory", "chunk", "content"):
+                value = item.get(field)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
             return None
         # Stainless SDK returns pydantic models (attribute access, snake_case).
-        memory = getattr(item, "memory", None)
-        if isinstance(memory, str):
-            trimmed = memory.strip()
-            return trimmed if trimmed else None
+        for field in ("memory", "chunk", "content"):
+            value = getattr(item, field, None)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
         return None
+
+    def comparison_key(memory: str) -> str:
+        """Remove Mono's dynamic-profile date decoration for comparison only."""
+        return re.sub(
+            r"^(?:\[Recent\]\s*)?\[\d{4}-\d{2}-\d{2}\]\s*",
+            "",
+            memory,
+            count=1,
+        ).strip()
 
     static_memories: list[str] = []
     seen_memories: set[str] = set()
@@ -115,21 +125,21 @@ def deduplicate_memories(
         memory = extract_memory_text(item)
         if memory is not None:
             static_memories.append(memory)
-            seen_memories.add(memory)
+            seen_memories.add(comparison_key(memory))
 
     dynamic_memories: list[str] = []
     for item in dynamic_items:
         memory = extract_memory_text(item)
-        if memory is not None and memory not in seen_memories:
+        if memory is not None and comparison_key(memory) not in seen_memories:
             dynamic_memories.append(memory)
-            seen_memories.add(memory)
+            seen_memories.add(comparison_key(memory))
 
     search_memories: list[str] = []
     for item in search_items:
         memory = extract_memory_text(item)
-        if memory is not None and memory not in seen_memories:
+        if memory is not None and comparison_key(memory) not in seen_memories:
             search_memories.append(memory)
-            seen_memories.add(memory)
+            seen_memories.add(comparison_key(memory))
 
     return DeduplicatedMemories(
         static=static_memories,

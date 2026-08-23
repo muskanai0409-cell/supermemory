@@ -1,14 +1,19 @@
 """Utility functions for Supermemory Pipecat integration."""
 
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Union
 
 
-def get_last_user_message(messages: List[Dict[str, str]]) -> str | None:
+_DYNAMIC_DATE_PREFIX = re.compile(r"^\s*(?:\[Recent\]\s*)?\[\d{4}-\d{2}-\d{2}\]\s*")
+
+
+def get_last_user_message(messages: List[Dict[str, Any]]) -> str | None:
     """Extract the last user message content from a list of messages."""
     for msg in reversed(messages):
-        if msg["role"] == "user":
-            return msg["content"]
+        content = msg.get("content")
+        if msg.get("role") == "user" and isinstance(content, str):
+            return content
     return None
 
 
@@ -81,26 +86,37 @@ def deduplicate_memories(
         dynamic: List of dynamic memory strings.
         search_results: Search result dicts or pydantic models with a memory field.
     """
-    seen = set()
+    seen: set[str] = set()
+
+    def comparison_key(memory: str) -> str:
+        # Dynamic profile entries are date-labelled by the API while search
+        # results contain the same memory without that presentation prefix.
+        return _DYNAMIC_DATE_PREFIX.sub("", memory.strip())
 
     def unique_strings(memories: List[str]) -> List[str]:
-        out = []
+        out: List[str] = []
         for m in memories:
-            if m not in seen:
-                seen.add(m)
+            if not isinstance(m, str):
+                continue
+            key = comparison_key(m)
+            if key and key not in seen:
+                seen.add(key)
                 out.append(m)
         return out
 
     def unique_search(results: List[Any]) -> List[Any]:
-        out = []
+        out: List[Any] = []
         for r in results:
             # v4 search.memories/hybrid uses `memory` or `chunk`.
-            memory = _field(r, "memory", "chunk", "content", default="")
+            memory = (
+                r if isinstance(r, str) else _field(r, "memory", "chunk", "content", default="")
+            )
             if not isinstance(memory, str):
                 memory = ""
             memory = memory.strip()
-            if memory and memory not in seen:
-                seen.add(memory)
+            key = comparison_key(memory)
+            if key and key not in seen:
+                seen.add(key)
                 out.append(r)
         return out
 

@@ -1,5 +1,6 @@
 """Utility functions for Supermemory Cartesia integration."""
 
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Union
 
@@ -69,6 +70,18 @@ def _field(item: Any, *names: str, default: Any = None) -> Any:
     return default
 
 
+_MEMORY_DATE_PREFIX = re.compile(
+    r"^\s*(?:\[recent\]\s*)?(?:\[\d{4}-\d{2}-\d{2}\]\s*)?",
+    re.IGNORECASE,
+)
+
+
+def _memory_key(memory: str) -> str:
+    """Normalize display-only profile prefixes for duplicate comparison."""
+    without_prefix = _MEMORY_DATE_PREFIX.sub("", memory)
+    return " ".join(without_prefix.split()).casefold()
+
+
 def deduplicate_memories(
     static: List[str],
     dynamic: List[str],
@@ -86,8 +99,11 @@ def deduplicate_memories(
     def unique_strings(memories: List[str]) -> List[str]:
         out = []
         for m in memories:
-            if m not in seen:
-                seen.add(m)
+            if not isinstance(m, str):
+                continue
+            key = _memory_key(m)
+            if key and key not in seen:
+                seen.add(key)
                 out.append(m)
         return out
 
@@ -99,8 +115,9 @@ def deduplicate_memories(
             if not isinstance(memory, str):
                 memory = ""
             memory = memory.strip()
-            if memory and memory not in seen:
-                seen.add(memory)
+            key = _memory_key(memory)
+            if key and key not in seen:
+                seen.add(key)
                 out.append(r)
         return out
 

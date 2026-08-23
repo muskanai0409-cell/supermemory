@@ -15,7 +15,7 @@ import type { SupermemoryToolsConfig } from "../types"
  */
 export interface MemorySearchResult {
 	success: boolean
-	results?: Awaited<ReturnType<Supermemory["search"]["documents"]>>["results"]
+	results?: Awaited<ReturnType<Supermemory["search"]>>["results"]
 	count?: number
 	error?: string
 }
@@ -245,7 +245,6 @@ export function createSearchMemoriesFunction(
 
 	return async function searchMemories({
 		informationToGet,
-		includeFullDocs = DEFAULT_VALUES.includeFullDocs,
 		limit = DEFAULT_VALUES.limit,
 	}: {
 		informationToGet: string
@@ -253,12 +252,12 @@ export function createSearchMemoriesFunction(
 		limit?: number
 	}): Promise<MemorySearchResult> {
 		try {
-			const response = await client.search.documents({
+			const response = await client.search({
 				q: informationToGet,
-				containerTags,
+				containerTag: containerTags[0],
 				limit,
-				chunkThreshold: DEFAULT_VALUES.chunkThreshold,
-				includeFullDocs,
+				threshold: DEFAULT_VALUES.searchThreshold,
+				searchMode: "hybrid",
 			})
 
 			return {

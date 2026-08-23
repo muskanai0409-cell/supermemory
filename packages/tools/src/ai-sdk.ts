@@ -51,18 +51,14 @@ export const searchMemoriesTool = (
 						.default(DEFAULT_VALUES.limit)
 						.describe(PARAMETER_DESCRIPTIONS.limit),
 		}),
-		execute: async ({
-			informationToGet,
-			includeFullDocs = DEFAULT_VALUES.includeFullDocs,
-			limit = DEFAULT_VALUES.limit,
-		}) => {
+		execute: async ({ informationToGet, limit = DEFAULT_VALUES.limit }) => {
 			try {
-				const response = await client.search.documents({
+				const response = await client.search({
 					q: informationToGet,
-					containerTags,
+					containerTag: containerTags[0],
 					limit,
-					chunkThreshold: DEFAULT_VALUES.chunkThreshold,
-					includeFullDocs,
+					threshold: DEFAULT_VALUES.searchThreshold,
+					searchMode: "hybrid",
 				})
 
 				return {

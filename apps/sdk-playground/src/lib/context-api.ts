@@ -5,7 +5,19 @@ import {
 } from "./middleware-config"
 
 export interface MemoryDebugEntry {
-	type: "profile_fetch" | "context_preview" | "conversation_saved" | "manual_profile"
+	type:
+		| "context_reconstruction"
+		| "context_preview"
+		| "conversation_save_requested"
+		| "conversation_save_accepted"
+		| "conversation_save_failed"
+		| "conversation_save_queued"
+		| "conversation_save_skipped"
+		| "conversation_saved"
+		| "profile_fetch"
+		| "context_debug_unavailable"
+		| "debug_error"
+		| "manual_profile"
 	label: string
 	detail?: Record<string, unknown>
 	preview?: string
@@ -36,6 +48,8 @@ function getSupermemoryClient(apiKey: string) {
 	if (!apiKey) throw new Error("Supermemory API key is required")
 	return new Supermemory({
 		apiKey,
+		timeout: 10_000,
+		maxRetries: 1,
 		...(process.env.SUPERMEMORY_BASE_URL
 			? { baseURL: process.env.SUPERMEMORY_BASE_URL }
 			: {}),
@@ -77,6 +91,17 @@ function summarizeProfile(profile: ContainerContext["profile"]) {
 	}
 }
 
+function selectProfileForMode(
+	profile: ContainerContext["profile"],
+	mode: "profile" | "query" | "full",
+): ContainerContext["profile"] {
+	return {
+		static: mode === "query" ? [] : profile.static,
+		dynamic: mode === "query" ? [] : profile.dynamic,
+		searchResults: mode === "profile" ? [] : profile.searchResults,
+	}
+}
+
 function buildContextPreview(
 	profile: ContainerContext["profile"],
 	mode: "profile" | "query" | "full",
@@ -84,13 +109,13 @@ function buildContextPreview(
 ): string {
 	const lines: string[] = [`[memory mode: ${mode}]`]
 	if (query) lines.push(`[query: ${query}]`)
-	if (profile.static.length) {
+	if (mode !== "query" && profile.static.length) {
 		lines.push("Static:")
 		for (const item of profile.static.slice(0, 8)) {
 			lines.push(`- ${memoryText(item)}`)
 		}
 	}
-	if (profile.dynamic.length) {
+	if (mode !== "query" && profile.dynamic.length) {
 		lines.push("Dynamic:")
 		for (const item of profile.dynamic.slice(0, 8)) {
 			lines.push(`- ${memoryText(item)}`)
@@ -123,6 +148,30 @@ export function resolveProfileQuery(
 	return lastUserMessage || undefined
 }
 
+async function fetchProfileContext(
+	client: ReturnType<typeof getSupermemoryClient>,
+	containerTag: string,
+	query?: string,
+	signal?: AbortSignal,
+): Promise<ContainerContext["profile"]> {
+	const profileResponse = await client.profile(
+		{
+			containerTag,
+			...(query ? { q: query } : {}),
+		},
+		{ signal },
+	)
+	const profileRaw = profileResponse.profile as
+		| { static?: unknown[]; dynamic?: unknown[] }
+		| undefined
+
+	return {
+		static: profileRaw?.static ?? [],
+		dynamic: profileRaw?.dynamic ?? [],
+		searchResults: normalizeSearchResults(profileResponse.searchResults),
+	}
+}
+
 export async function fetchContainerContext(
 	containerTag: string,
 	query?: string,
@@ -133,21 +182,7 @@ export async function fetchContainerContext(
 	if (!apiKey) throw new Error("Supermemory API key is required")
 
 	const client = getSupermemoryClient(apiKey)
-
-	const profileResponse = await client.profile({
-		containerTag,
-		...(query ? { q: query } : {}),
-	})
-
-	const profileRaw = profileResponse.profile as
-		| { static?: unknown[]; dynamic?: unknown[] }
-		| undefined
-
-	const profile = {
-		static: profileRaw?.static ?? [],
-		dynamic: profileRaw?.dynamic ?? [],
-		searchResults: normalizeSearchResults(profileResponse.searchResults),
-	}
+	const profile = await fetchProfileContext(client, containerTag, query)
 
 	const docsResponse = await client.post<{
 		documents?: unknown[]
@@ -196,87 +231,83 @@ export async function buildMiddlewareMemoryDebug(
 		skipMemoryOnError?: boolean
 	},
 	supermemoryApiKey?: string,
+	signal?: AbortSignal,
 ): Promise<MemoryDebugEntry[]> {
 	const config = normalizeMiddlewareConfig(middlewareConfig)
 	const query = resolveProfileQuery(lastUserMessage, memoryMode)
-	const context = await fetchContainerContext(
-		containerTag,
-		query,
-		supermemoryApiKey,
-	)
-	const summary = summarizeProfile(context.profile)
 
-	const trace: MemoryDebugEntry[] = [
-		{
-			type: "profile_fetch",
-			label: "Automatic profile fetch (middleware)",
-			detail: {
-				endpoint: "POST /v4/profile",
-				containerTag,
-				customId: conversationId,
-				memoryMode,
-				addMemory: config.addMemory,
-				verbose: config.verbose,
-				...(aiSdkExtras?.includeToolCalls !== undefined
-					? { includeToolCalls: aiSdkExtras.includeToolCalls }
-					: {}),
-				...(aiSdkExtras?.skipMemoryOnError !== undefined
-					? { skipMemoryOnError: aiSdkExtras.skipMemoryOnError }
-					: {}),
-				query: query ?? null,
-				...summary,
+	try {
+		const apiKey =
+			supermemoryApiKey?.trim() || process.env.SUPERMEMORY_API_KEY?.trim()
+		if (!apiKey) throw new Error("Supermemory API key is required")
+		const profile = await fetchProfileContext(
+			getSupermemoryClient(apiKey),
+			containerTag,
+			query,
+			signal,
+		)
+		const selectedProfile = selectProfileForMode(profile, memoryMode)
+		const summary = summarizeProfile(selectedProfile)
+
+		return [
+			{
+				type: "context_reconstruction",
+				label: "Post-response context reconstruction",
+				detail: {
+					authoritativeMiddlewareCapture: false,
+					timing: "after model response",
+					endpoint: "POST /v4/profile",
+					containerTag,
+					customId: conversationId,
+					memoryMode,
+					addMemory: config.addMemory,
+					verbose: config.verbose,
+					...(aiSdkExtras?.includeToolCalls !== undefined
+						? { includeToolCalls: aiSdkExtras.includeToolCalls }
+						: {}),
+					...(aiSdkExtras?.skipMemoryOnError !== undefined
+						? { skipMemoryOnError: aiSdkExtras.skipMemoryOnError }
+						: {}),
+					query: query ?? null,
+					...summary,
+				},
 			},
-		},
-		{
-			type: "context_preview",
-			label: "Context injected into prompt",
-			preview: buildContextPreview(context.profile, memoryMode, query),
-		},
-		{
-			type: "conversation_saved",
-			label: "Conversation auto-saved after response",
-			detail: {
-				containerTag,
-				customId: conversationId,
-				addMemory: config.addMemory,
-				verbose: config.verbose,
-				...(aiSdkExtras?.includeToolCalls !== undefined
-					? { includeToolCalls: aiSdkExtras.includeToolCalls }
-					: {}),
+			{
+				type: "context_preview",
+				label: "Reconstructed context preview (not middleware capture)",
+				preview: buildContextPreview(selectedProfile, memoryMode, query),
 			},
-		},
-	]
-
-	return trace
-}
-
-export async function buildManualProfileDebug(
-	containerTag: string,
-	lastUserMessage: string,
-	supermemoryApiKey?: string,
-): Promise<MemoryDebugEntry[]> {
-	const context = await fetchContainerContext(
-		containerTag,
-		lastUserMessage,
-		supermemoryApiKey,
-	)
-	const summary = summarizeProfile(context.profile)
-
-	return [
-		{
-			type: "manual_profile",
-			label: "Manual profile() + add() pattern",
-			detail: {
-				containerTag,
-				query: lastUserMessage,
-				...summary,
+			config.addMemory === "always"
+				? {
+						type: "conversation_save_requested",
+						label: "Conversation save requested by middleware",
+						detail: {
+							confirmed: false,
+							containerTag,
+							customId: conversationId,
+							addMemory: config.addMemory,
+							verbose: config.verbose,
+							...(aiSdkExtras?.includeToolCalls !== undefined
+								? { includeToolCalls: aiSdkExtras.includeToolCalls }
+								: {}),
+						},
+					}
+				: {
+						type: "conversation_save_skipped",
+						label: "Conversation saving disabled",
+						detail: { addMemory: config.addMemory },
+					},
+		]
+	} catch (error) {
+		return [
+			{
+				type: "debug_error",
+				label: "Post-response context reconstruction unavailable",
+				detail: {
+					nonFatal: true,
+					error: error instanceof Error ? error.message : String(error),
+				},
 			},
-			preview: buildContextPreview(context.profile, "full", lastUserMessage),
-		},
-		{
-			type: "conversation_saved",
-			label: "Conversation saved via client.add()",
-			detail: { containerTag, customId: "sdk-playground-direct" },
-		},
-	]
+		]
+	}
 }

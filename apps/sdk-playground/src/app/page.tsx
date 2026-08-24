@@ -46,15 +46,17 @@ export default function AgentPlaygroundPage() {
 		() => ({ supermemoryApiKey, openaiApiKey }),
 		[supermemoryApiKey, openaiApiKey],
 	)
-	const keysReady =
-		supermemoryApiKey.trim().length > 0 && openaiApiKey.trim().length > 0
+	const supermemoryKeyReady =
+		supermemoryApiKey.trim().length > 0 || hasSupermemoryKey
+	const openAiKeyReady = openaiApiKey.trim().length > 0 || hasOpenAiKey
+	const keysReady = supermemoryKeyReady && openAiKeyReady
 
 	const [sdkId, setSdkId] = useState("ts-ai-sdk-middleware")
 	const [containerTag, setContainerTag] = useState("sdk-playground")
 	const [memoryMode, setMemoryMode] = useState<"profile" | "query" | "full">(
 		"full",
 	)
-	const [conversationId, setConversationId] = useState(() => crypto.randomUUID())
+	const [conversationId, setConversationId] = useState("")
 	const [middlewareConfig, setMiddlewareConfig] =
 		useState<MiddlewareRuntimeConfig>(DEFAULT_MIDDLEWARE_CONFIG)
 
@@ -66,7 +68,9 @@ export default function AgentPlaygroundPage() {
 	const [leftPanel, setLeftPanel] = useState<"sdks" | "tools">("sdks")
 
 	const lastUserMessage = useMemo(() => {
-		const users = messages.filter((m): m is UserOrAssistantMessage => m.kind === "user")
+		const users = messages.filter(
+			(m): m is UserOrAssistantMessage => m.kind === "user",
+		)
 		return users.at(-1)?.content ?? ""
 	}, [messages])
 
@@ -76,8 +80,8 @@ export default function AgentPlaygroundPage() {
 	)
 
 	useEffect(() => {
-		setContextRefreshKey((k) => k + 1)
-	}, [containerTag, supermemoryApiKey])
+		setConversationId((current) => current || crypto.randomUUID())
+	}, [])
 
 	const refreshMeta = useCallback(async () => {
 		try {
@@ -99,14 +103,20 @@ export default function AgentPlaygroundPage() {
 	}, [refreshMeta])
 
 	const send = async () => {
-		if (!input.trim() || loading || !selectedSdk?.available || !keysReady) return
+		if (!input.trim() || loading || !selectedSdk?.available || !keysReady)
+			return
+		const activeConversationId = conversationId.trim() || crypto.randomUUID()
+		if (!conversationId.trim()) setConversationId(activeConversationId)
 
 		const userMessage: UserOrAssistantMessage = {
 			kind: "user",
 			content: input.trim(),
 		}
 		const chatHistory = messages
-			.filter((m): m is UserOrAssistantMessage => m.kind === "user" || m.kind === "assistant")
+			.filter(
+				(m): m is UserOrAssistantMessage =>
+					m.kind === "user" || m.kind === "assistant",
+			)
 			.map((m) => ({ role: m.kind, content: m.content }))
 		const nextMessages = [...messages, userMessage]
 		setMessages(nextMessages)
@@ -120,9 +130,12 @@ export default function AgentPlaygroundPage() {
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					sdkId,
-					messages: [...chatHistory, { role: "user", content: userMessage.content }],
+					messages: [
+						...chatHistory,
+						{ role: "user", content: userMessage.content },
+					],
 					containerTag,
-					conversationId,
+					conversationId: activeConversationId,
 					memoryMode:
 						selectedSdk.mode === "middleware" ? memoryMode : undefined,
 					middlewareConfig:
@@ -168,12 +181,12 @@ export default function AgentPlaygroundPage() {
 					</p>
 				</div>
 				<div className="flex flex-wrap gap-2 text-xs">
+					<Status ok={supermemoryKeyReady} label="Supermemory key" />
+					<Status ok={openAiKeyReady} label="OpenAI key" />
 					<Status
-						ok={keysReady || hasSupermemoryKey}
-						label="Supermemory key"
+						ok={pythonOk}
+						label={`Python ${pythonUrl.replace("http://", "")}`}
 					/>
-					<Status ok={keysReady || hasOpenAiKey} label="OpenAI key" />
-					<Status ok={pythonOk} label={`Python ${pythonUrl.replace("http://", "")}`} />
 					<span className="rounded-full border border-zinc-700 px-3 py-1 text-zinc-400">
 						model: {model}
 					</span>
@@ -181,6 +194,8 @@ export default function AgentPlaygroundPage() {
 				<ApiKeysPanel
 					supermemoryApiKey={supermemoryApiKey}
 					openaiApiKey={openaiApiKey}
+					hasSupermemoryEnvKey={hasSupermemoryKey}
+					hasOpenAiEnvKey={hasOpenAiKey}
 					onSupermemoryChange={setSupermemoryApiKey}
 					onOpenAiChange={setOpenaiApiKey}
 				/>
@@ -249,26 +264,22 @@ export default function AgentPlaygroundPage() {
 					)}
 
 					{leftPanel === "sdks" && (
-					<div className="flex flex-wrap items-end gap-3 md:hidden">
-						<label className="flex-1 space-y-1">
-							<span className="text-xs text-zinc-500">SDK</span>
-							<select
-								value={sdkId}
-								onChange={(e) => setSdkId(e.target.value)}
-								className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-2 text-sm"
-							>
-								{sdks.map((s) => (
-									<option
-										key={s.id}
-										value={s.id}
-										disabled={!s.available}
-									>
-										{s.label}
-									</option>
-								))}
-							</select>
-						</label>
-					</div>
+						<div className="flex flex-wrap items-end gap-3 md:hidden">
+							<label className="flex-1 space-y-1">
+								<span className="text-xs text-zinc-500">SDK</span>
+								<select
+									value={sdkId}
+									onChange={(e) => setSdkId(e.target.value)}
+									className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-2 text-sm"
+								>
+									{sdks.map((s) => (
+										<option key={s.id} value={s.id} disabled={!s.available}>
+											{s.label}
+										</option>
+									))}
+								</select>
+							</label>
+						</div>
 					)}
 
 					{selectedSdk && (
@@ -280,7 +291,9 @@ export default function AgentPlaygroundPage() {
 								<span className="text-zinc-400">
 									{selectedSdk.mode === "middleware"
 										? "automatic memory"
-										: "explicit tools"}
+										: selectedSdk.mode === "tools"
+											? "explicit tools"
+											: "manual profile + save"}
 								</span>
 							</div>
 						</div>
@@ -292,6 +305,7 @@ export default function AgentPlaygroundPage() {
 							<input
 								value={containerTag}
 								onChange={(e) => setContainerTag(e.target.value)}
+								maxLength={100}
 								className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm w-40"
 							/>
 						</label>
@@ -300,6 +314,7 @@ export default function AgentPlaygroundPage() {
 							<input
 								value={conversationId}
 								onChange={(e) => setConversationId(e.target.value)}
+								maxLength={242}
 								className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm font-mono w-52"
 							/>
 						</label>
@@ -395,11 +410,9 @@ export default function AgentPlaygroundPage() {
 							if (m.kind === "debug") {
 								return (
 									<div key={i} className="flex justify-start">
-										<div
-											className="max-w-[92%] rounded-lg border border-violet-900/50 bg-violet-950/25 px-3 py-2 text-xs"
-										>
+										<div className="max-w-[92%] rounded-lg border border-violet-900/50 bg-violet-950/25 px-3 py-2 text-xs">
 											<div className="font-medium text-violet-300 mb-1">
-												Auto · {m.entry.label}
+												Debug · {m.entry.label}
 											</div>
 											{m.entry.detail && (
 												<pre className="font-mono text-violet-100/70 whitespace-pre-wrap break-all mb-2">
@@ -418,9 +431,7 @@ export default function AgentPlaygroundPage() {
 							if (m.kind === "tool") {
 								return (
 									<div key={i} className="flex justify-start">
-										<div
-											className="max-w-[90%] rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-xs font-mono text-amber-100/90"
-										>
+										<div className="max-w-[90%] rounded-lg border border-amber-900/50 bg-amber-950/30 px-3 py-2 text-xs font-mono text-amber-100/90">
 											<div className="font-sans text-amber-400 font-medium mb-1">
 												Tool · step {m.entry.step} · {m.entry.toolName}
 											</div>
@@ -484,7 +495,7 @@ export default function AgentPlaygroundPage() {
 									send()
 								}
 							}}
-							disabled={loading || !input.trim() || !selectedSdk?.available || !keysReady}
+							disabled={loading || !selectedSdk?.available || !keysReady}
 							placeholder={
 								keysReady
 									? "Message the agent…"
@@ -495,7 +506,12 @@ export default function AgentPlaygroundPage() {
 						<button
 							type="button"
 							onClick={send}
-							disabled={loading || !input.trim() || !selectedSdk?.available || !keysReady}
+							disabled={
+								loading ||
+								!input.trim() ||
+								!selectedSdk?.available ||
+								!keysReady
+							}
 							className="rounded-lg bg-emerald-600 px-5 py-3 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-40"
 						>
 							Send
@@ -508,7 +524,8 @@ export default function AgentPlaygroundPage() {
 						containerTag={containerTag}
 						lastUserMessage={lastUserMessage}
 						refreshKey={contextRefreshKey}
-						apiKeys={apiKeys}
+						supermemoryApiKey={supermemoryApiKey}
+						supermemoryKeyReady={supermemoryKeyReady}
 					/>
 				</aside>
 			</div>

@@ -14,8 +14,8 @@ export function ToolsReferencePanel() {
 				</h2>
 				<p className="mt-1 text-[10px] leading-snug text-zinc-600">
 					Canonical descriptions from{" "}
-					<code className="text-zinc-500">@supermemory/tools</code> — what
-					the model sees in tools mode.
+					<code className="text-zinc-500">@supermemory/tools</code> — what the
+					model sees in tools mode.
 				</p>
 			</div>
 
@@ -91,9 +91,14 @@ function ToolCard({
 											<span className="font-mono text-[10px] text-sky-400/90">
 												{param.name}
 											</span>
-											{param.pythonName !== param.name && (
+											{param.pythonName && param.pythonName !== param.name && (
 												<span className="font-mono text-[10px] text-zinc-600">
 													/ {param.pythonName}
+												</span>
+											)}
+											{!param.pythonName && (
+												<span className="text-[9px] text-sky-500/80">
+													TypeScript only
 												</span>
 											)}
 											{param.required && (

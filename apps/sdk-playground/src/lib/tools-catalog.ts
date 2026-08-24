@@ -5,7 +5,8 @@ import {
 
 export interface CatalogParameter {
 	name: string
-	pythonName: string
+	/** Omitted when this parameter is only exposed by the TypeScript tool schema. */
+	pythonName?: string
 	description: string
 	required?: boolean
 }
@@ -31,7 +32,6 @@ export const TOOL_CATALOG: CatalogTool[] = [
 			},
 			{
 				name: "includeFullDocs",
-				pythonName: "include_full_docs",
 				description: PARAMETER_DESCRIPTIONS.includeFullDocs,
 			},
 			{
@@ -61,7 +61,6 @@ export const TOOL_CATALOG: CatalogTool[] = [
 		parameters: [
 			{
 				name: "containerTag",
-				pythonName: "container_tag",
 				description: PARAMETER_DESCRIPTIONS.containerTag,
 			},
 			{
@@ -78,7 +77,6 @@ export const TOOL_CATALOG: CatalogTool[] = [
 		parameters: [
 			{
 				name: "containerTag",
-				pythonName: "container_tag",
 				description: PARAMETER_DESCRIPTIONS.containerTag,
 			},
 			{
@@ -103,6 +101,10 @@ export const TOOL_CATALOG: CatalogTool[] = [
 				pythonName: "document_id",
 				description: PARAMETER_DESCRIPTIONS.documentId,
 				required: true,
+			},
+			{
+				name: "containerTag",
+				description: PARAMETER_DESCRIPTIONS.documentContainerTag,
 			},
 		],
 	},
@@ -136,7 +138,6 @@ export const TOOL_CATALOG: CatalogTool[] = [
 		parameters: [
 			{
 				name: "containerTag",
-				pythonName: "container_tag",
 				description: PARAMETER_DESCRIPTIONS.containerTag,
 			},
 			{

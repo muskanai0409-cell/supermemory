@@ -1,15 +1,39 @@
 import { NextResponse } from "next/server"
+import { CHAT_SDK_REGISTRY, PYTHON_SERVER_URL } from "@/lib/sdk-registry"
 import {
-	CHAT_SDK_REGISTRY,
-	PYTHON_SERVER_URL,
-} from "@/lib/sdk-registry"
-import { resolveApiKeys } from "@/lib/api-keys"
-import { runTypeScriptChat, type ChatMessage } from "@/lib/chat-handlers"
+	resolveApiKeys,
+	resolveOpenAiApiKey,
+	resolveSupermemoryApiKey,
+} from "@/lib/api-keys"
+import {
+	PlaygroundChatTimeoutError,
+	runTypeScriptChat,
+} from "@/lib/chat-handlers"
+import {
+	PlaygroundRequestError,
+	assertTrustedBrowserRequest,
+	mayUseEnvironmentKeys,
+	parseApiKeys,
+	parseContainerTag,
+	parseConversationId,
+	parseIdentifier,
+	parseMemoryMode,
+	parseMessages,
+	parseMiddlewareConfig,
+	readJsonObject,
+} from "@/lib/request-validation"
 
-export async function GET() {
+const PYTHON_HEALTH_TIMEOUT_MS = 2_000
+// Python reserves 115s for the model/tool path and up to 10s for nonfatal debug.
+const PYTHON_CHAT_TIMEOUT_MS = 130_000
+
+export async function GET(request: Request) {
 	let pythonOk = false
 	try {
-		const res = await fetch(`${PYTHON_SERVER_URL}/health`, { cache: "no-store" })
+		const res = await fetch(`${PYTHON_SERVER_URL}/health`, {
+			cache: "no-store",
+			signal: AbortSignal.timeout(PYTHON_HEALTH_TIMEOUT_MS),
+		})
 		if (res.ok) {
 			const data = await res.json()
 			pythonOk = data.playground === "sdk-playground"
@@ -18,12 +42,14 @@ export async function GET() {
 		pythonOk = false
 	}
 
-	const envKeys = resolveApiKeys()
+	const allowEnvironment = mayUseEnvironmentKeys(request)
 
 	return NextResponse.json({
 		sdks: CHAT_SDK_REGISTRY,
-		hasSupermemoryKey: Boolean(envKeys?.supermemoryApiKey),
-		hasOpenAiKey: Boolean(envKeys?.openaiApiKey),
+		hasSupermemoryKey: Boolean(
+			resolveSupermemoryApiKey(null, { allowEnvironment }),
+		),
+		hasOpenAiKey: Boolean(resolveOpenAiApiKey(null, { allowEnvironment })),
 		pythonUrl: PYTHON_SERVER_URL,
 		model: process.env.MODEL_NAME ?? "gpt-4o-mini",
 		pythonOk,
@@ -33,20 +59,17 @@ export async function GET() {
 export async function POST(req: Request) {
 	const started = Date.now()
 	try {
-		const body = await req.json()
-		const sdkId = String(body.sdkId ?? "")
-		const messages = (body.messages ?? []) as ChatMessage[]
-		const containerTag = String(body.containerTag ?? "sdk-playground")
-		const conversationId = String(body.conversationId ?? "default-session")
-		const memoryMode = body.memoryMode as
-			| "profile"
-			| "query"
-			| "full"
-			| undefined
-		const middlewareConfig = body.middlewareConfig as
-			| Record<string, unknown>
-			| undefined
-		const apiKeys = resolveApiKeys(body.apiKeys)
+		assertTrustedBrowserRequest(req)
+		const body = await readJsonObject(req)
+		const sdkId = parseIdentifier(body.sdkId, "sdkId")
+		const messages = parseMessages(body.messages)
+		const containerTag = parseContainerTag(body.containerTag)
+		const conversationId = parseConversationId(body.conversationId)
+		const memoryMode = parseMemoryMode(body.memoryMode)
+		const middlewareConfig = parseMiddlewareConfig(body.middlewareConfig)
+		const apiKeys = resolveApiKeys(parseApiKeys(body.apiKeys), {
+			allowEnvironment: mayUseEnvironmentKeys(req),
+		})
 
 		if (!apiKeys) {
 			return NextResponse.json(
@@ -80,6 +103,7 @@ export async function POST(req: Request) {
 					middlewareConfig,
 					apiKeys,
 				}),
+				signal: AbortSignal.timeout(PYTHON_CHAT_TIMEOUT_MS),
 			})
 			const data = await res.json()
 			if (!res.ok && !data.error) {
@@ -92,10 +116,13 @@ export async function POST(req: Request) {
 					{ status: res.status },
 				)
 			}
-			return NextResponse.json({
-				...data,
-				durationMs: Date.now() - started,
-			})
+			return NextResponse.json(
+				{
+					...data,
+					durationMs: Date.now() - started,
+				},
+				{ status: res.ok ? 200 : res.status },
+			)
 		}
 
 		const result = await runTypeScriptChat(
@@ -121,13 +148,20 @@ export async function POST(req: Request) {
 			durationMs: Date.now() - started,
 		})
 	} catch (error) {
+		const status =
+			error instanceof PlaygroundRequestError
+				? error.status
+				: error instanceof PlaygroundChatTimeoutError ||
+						(error instanceof Error && error.name === "TimeoutError")
+					? 504
+					: 500
 		return NextResponse.json(
 			{
 				ok: false,
 				durationMs: Date.now() - started,
 				error: error instanceof Error ? error.message : String(error),
 			},
-			{ status: 500 },
+			{ status },
 		)
 	}
 }

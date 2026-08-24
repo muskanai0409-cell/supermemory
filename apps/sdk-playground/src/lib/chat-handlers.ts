@@ -11,7 +11,6 @@ import {
 import { supermemoryTools as aiSdkTools } from "@supermemory/tools/ai-sdk"
 import type { SupermemoryToolsConfig } from "@supermemory/tools"
 import type { PlaygroundApiKeys } from "./api-keys"
-import { withPlaygroundEnvKeys } from "./api-keys"
 import {
 	buildMiddlewareMemoryDebug,
 	type MemoryDebugEntry,
@@ -47,6 +46,72 @@ export interface ChatRequest {
 	apiKeys?: Partial<PlaygroundApiKeys>
 	containerTags?: string[]
 	projectId?: string
+}
+
+export class PlaygroundChatTimeoutError extends Error {
+	constructor(message: string) {
+		super(message)
+		this.name = "PlaygroundChatTimeoutError"
+	}
+}
+
+const MODEL_REQUEST_TIMEOUT_MS = 120_000
+const DEBUG_REQUEST_TIMEOUT_MS = 10_000
+const MAX_OUTPUT_TOKENS = 2_048
+
+async function withChatDeadline<T>(
+	operation: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+	const controller = new AbortController()
+	let timeout: ReturnType<typeof setTimeout> | undefined
+	const deadline = new Promise<never>((_resolve, reject) => {
+		timeout = setTimeout(() => {
+			const error = new PlaygroundChatTimeoutError(
+				`TypeScript chat timed out after ${MODEL_REQUEST_TIMEOUT_MS / 1_000} seconds`,
+			)
+			controller.abort(error)
+			reject(error)
+		}, MODEL_REQUEST_TIMEOUT_MS)
+	})
+
+	try {
+		return await Promise.race([operation(controller.signal), deadline])
+	} finally {
+		if (timeout) clearTimeout(timeout)
+	}
+}
+
+async function buildBestEffortDebug(
+	operation: (signal: AbortSignal) => Promise<MemoryDebugEntry[]>,
+): Promise<MemoryDebugEntry[]> {
+	const controller = new AbortController()
+	let timeout: ReturnType<typeof setTimeout> | undefined
+	const deadline = new Promise<MemoryDebugEntry[]>((resolve) => {
+		timeout = setTimeout(() => {
+			controller.abort()
+			resolve([
+				{
+					type: "debug_error",
+					label: "Post-response context reconstruction timed out",
+					detail: { nonFatal: true },
+				},
+			])
+		}, DEBUG_REQUEST_TIMEOUT_MS)
+	})
+
+	try {
+		return await Promise.race([operation(controller.signal), deadline])
+	} catch {
+		return [
+			{
+				type: "debug_error",
+				label: "Post-response context reconstruction unavailable",
+				detail: { nonFatal: true },
+			},
+		]
+	} finally {
+		if (timeout) clearTimeout(timeout)
+	}
 }
 
 function getModelName(): string {
@@ -97,9 +162,7 @@ function extractAiSdkToolTrace(
 }
 
 function lastUserMessage(messages: ChatMessage[]): string {
-	return (
-		[...messages].reverse().find((m) => m.role === "user")?.content ?? ""
-	)
+	return [...messages].reverse().find((m) => m.role === "user")?.content ?? ""
 }
 
 async function chatAiSdkMiddleware(
@@ -109,6 +172,7 @@ async function chatAiSdkMiddleware(
 	conversationId: string,
 	memoryMode: "profile" | "query" | "full",
 	middlewareConfig: MiddlewareRuntimeConfig,
+	signal: AbortSignal,
 ): Promise<ChatResult> {
 	const openai = createOpenAI({ apiKey: keys.openaiApiKey })
 	const model = withSupermemoryAiSdk(openai(getModelName()), {
@@ -127,22 +191,11 @@ async function chatAiSdkMiddleware(
 		model,
 		system: "You are a helpful assistant with long-term memory about the user.",
 		messages: toModelMessages(messages.filter((m) => m.role !== "system")),
+		maxOutputTokens: MAX_OUTPUT_TOKENS,
+		abortSignal: signal,
 	})
 
-	const memoryDebug = await buildMiddlewareMemoryDebug(
-		containerTag,
-		conversationId,
-		memoryMode,
-		lastUserMessage(messages),
-		middlewareConfig,
-		{
-			includeToolCalls: middlewareConfig.includeToolCalls,
-			skipMemoryOnError: middlewareConfig.skipMemoryOnError,
-		},
-		keys.supermemoryApiKey,
-	)
-
-	return { text: result.text, toolTrace: [], memoryDebug }
+	return { text: result.text, toolTrace: [], memoryDebug: [] }
 }
 
 async function chatOpenAiMiddleware(
@@ -152,36 +205,36 @@ async function chatOpenAiMiddleware(
 	conversationId: string,
 	memoryMode: "profile" | "query" | "full",
 	middlewareConfig: MiddlewareRuntimeConfig,
+	signal: AbortSignal,
 ): Promise<ChatResult> {
-	const openai = new OpenAI({ apiKey: keys.openaiApiKey })
+	const openai = new OpenAI({
+		apiKey: keys.openaiApiKey,
+		timeout: MODEL_REQUEST_TIMEOUT_MS,
+		maxRetries: 1,
+	})
 	const client = withSupermemoryOpenAi(openai, {
 		containerTag,
 		customId: conversationId,
+		apiKey: keys.supermemoryApiKey,
 		mode: memoryMode,
 		addMemory: middlewareConfig.addMemory,
 		verbose: middlewareConfig.verbose,
 		baseUrl: process.env.SUPERMEMORY_BASE_URL,
 	})
 
-	const response = await client.chat.completions.create({
-		model: getModelName(),
-		messages: toOpenAiMessages(messages),
-	})
-
-	const memoryDebug = await buildMiddlewareMemoryDebug(
-		containerTag,
-		conversationId,
-		memoryMode,
-		lastUserMessage(messages),
-		middlewareConfig,
-		undefined,
-		keys.supermemoryApiKey,
+	const response = await client.chat.completions.create(
+		{
+			model: getModelName(),
+			messages: toOpenAiMessages(messages),
+			max_tokens: MAX_OUTPUT_TOKENS,
+		},
+		{ signal },
 	)
 
 	return {
 		text: response.choices[0]?.message?.content ?? "",
 		toolTrace: [],
-		memoryDebug,
+		memoryDebug: [],
 	}
 }
 
@@ -191,6 +244,7 @@ async function chatAiSdkTools(
 	messages: ChatMessage[],
 	containerTags?: string[],
 	projectId?: string,
+	signal?: AbortSignal,
 ): Promise<ChatResult> {
 	const openai = createOpenAI({ apiKey: keys.openaiApiKey })
 	const tools = toolsFactory(
@@ -204,6 +258,8 @@ async function chatAiSdkTools(
 		messages: toModelMessages(messages.filter((m) => m.role !== "system")),
 		tools,
 		stopWhen: stepCountIs(8),
+		maxOutputTokens: MAX_OUTPUT_TOKENS,
+		abortSignal: signal,
 	})
 
 	return {
@@ -218,10 +274,18 @@ async function chatOpenAiTools(
 	messages: ChatMessage[],
 	containerTags?: string[],
 	projectId?: string,
+	signal?: AbortSignal,
 ): Promise<ChatResult> {
-	const openai = new OpenAI({ apiKey: keys.openaiApiKey })
+	const openai = new OpenAI({
+		apiKey: keys.openaiApiKey,
+		timeout: MODEL_REQUEST_TIMEOUT_MS,
+		maxRetries: 1,
+	})
 	const config = getToolsConfig(containerTags, projectId)
-	const executeToolCalls = createToolCallsExecutor(keys.supermemoryApiKey, config)
+	const executeToolCalls = createToolCallsExecutor(
+		keys.supermemoryApiKey,
+		config,
+	)
 	const toolDefs = getToolDefinitions()
 	const trace: ToolTraceEntry[] = []
 
@@ -231,11 +295,15 @@ async function chatOpenAiTools(
 	]
 
 	for (let step = 0; step < 8; step++) {
-		const response = await openai.chat.completions.create({
-			model: getModelName(),
-			messages: convo,
-			tools: toolDefs,
-		})
+		const response = await openai.chat.completions.create(
+			{
+				model: getModelName(),
+				messages: convo,
+				tools: toolDefs,
+				max_tokens: MAX_OUTPUT_TOKENS,
+			},
+			{ signal },
+		)
 
 		const choice = response.choices[0]?.message
 		if (!choice) break
@@ -248,7 +316,9 @@ async function chatOpenAiTools(
 				const call = choice.tool_calls[i]
 				const rawContent = toolMessages[i]?.content
 				const raw =
-					typeof rawContent === "string" ? rawContent : JSON.stringify(rawContent)
+					typeof rawContent === "string"
+						? rawContent
+						: JSON.stringify(rawContent)
 				let parsedResult: unknown = raw
 				try {
 					parsedResult = JSON.parse(raw)
@@ -285,7 +355,7 @@ export async function runTypeScriptChat(
 	const memoryMode = request.memoryMode ?? "full"
 	const middlewareConfig = normalizeMiddlewareConfig(request.middlewareConfig)
 
-	return await withPlaygroundEnvKeys(keys, async () => {
+	const result = await withChatDeadline(async (signal) => {
 		switch (request.sdkId) {
 			case "ts-ai-sdk-middleware":
 				return await chatAiSdkMiddleware(
@@ -295,6 +365,7 @@ export async function runTypeScriptChat(
 					request.conversationId,
 					memoryMode,
 					middlewareConfig,
+					signal,
 				)
 			case "ts-openai-middleware":
 				return await chatOpenAiMiddleware(
@@ -304,6 +375,7 @@ export async function runTypeScriptChat(
 					request.conversationId,
 					memoryMode,
 					middlewareConfig,
+					signal,
 				)
 			case "ts-ai-sdk-tools":
 				return await chatAiSdkTools(
@@ -312,6 +384,7 @@ export async function runTypeScriptChat(
 					request.messages,
 					containerTags,
 					request.projectId,
+					signal,
 				)
 			case "ts-openai-tools":
 				return await chatOpenAiTools(
@@ -319,6 +392,7 @@ export async function runTypeScriptChat(
 					request.messages,
 					containerTags,
 					request.projectId,
+					signal,
 				)
 			case "ts-ai-sdk-package":
 				return await chatAiSdkTools(
@@ -327,9 +401,37 @@ export async function runTypeScriptChat(
 					request.messages,
 					containerTags,
 					request.projectId,
+					signal,
 				)
 			default:
 				throw new Error(`Unhandled SDK: ${request.sdkId}`)
 		}
 	})
+
+	if (
+		request.sdkId !== "ts-ai-sdk-middleware" &&
+		request.sdkId !== "ts-openai-middleware"
+	) {
+		return result
+	}
+
+	const memoryDebug = await buildBestEffortDebug((signal) =>
+		buildMiddlewareMemoryDebug(
+			request.containerTag,
+			request.conversationId,
+			memoryMode,
+			lastUserMessage(request.messages),
+			middlewareConfig,
+			request.sdkId === "ts-ai-sdk-middleware"
+				? {
+						includeToolCalls: middlewareConfig.includeToolCalls,
+						skipMemoryOnError: middlewareConfig.skipMemoryOnError,
+					}
+				: undefined,
+			keys.supermemoryApiKey,
+			signal,
+		),
+	)
+
+	return { ...result, memoryDebug }
 }

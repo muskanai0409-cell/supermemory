@@ -1,5 +1,5 @@
 export type SdkLanguage = "typescript" | "python"
-export type IntegrationMode = "middleware" | "tools"
+export type IntegrationMode = "middleware" | "tools" | "direct"
 
 export interface ToolTraceEntry {
 	step: number
@@ -35,7 +35,8 @@ export const CHAT_SDK_REGISTRY: ChatSdkDefinition[] = [
 		language: "typescript",
 		mode: "middleware",
 		package: "@supermemory/tools/openai",
-		description: "withSupermemory on OpenAI client — same automatic memory path",
+		description:
+			"withSupermemory on OpenAI client — same automatic memory path",
 		available: true,
 	},
 	{
@@ -44,7 +45,8 @@ export const CHAT_SDK_REGISTRY: ChatSdkDefinition[] = [
 		language: "typescript",
 		mode: "tools",
 		package: "@supermemory/tools/ai-sdk",
-		description: "Agent explicitly calls the 7 Supermemory tools via generateText",
+		description:
+			"Agent explicitly calls the 7 Supermemory tools via generateText",
 		available: true,
 	},
 	{
@@ -71,7 +73,8 @@ export const CHAT_SDK_REGISTRY: ChatSdkDefinition[] = [
 		language: "python",
 		mode: "middleware",
 		package: "supermemory-openai-sdk",
-		description: "with_supermemory — automatic profile injection + conversation save",
+		description:
+			"with_supermemory — automatic profile injection + conversation save",
 		available: true,
 	},
 	{
@@ -87,7 +90,7 @@ export const CHAT_SDK_REGISTRY: ChatSdkDefinition[] = [
 		id: "py-supermemory-direct",
 		label: "supermemory + manual context",
 		language: "python",
-		mode: "middleware",
+		mode: "direct",
 		package: "supermemory",
 		description: "profile() then OpenAI — manual integration pattern from docs",
 		available: true,

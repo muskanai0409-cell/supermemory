@@ -5,13 +5,36 @@ export interface PlaygroundApiKeys {
 
 export const API_KEYS_STORAGE_KEY = "sdk-playground-api-keys"
 
+interface ResolveApiKeyOptions {
+	allowEnvironment?: boolean
+}
+
+export function resolveSupermemoryApiKey(
+	input?: Partial<PlaygroundApiKeys> | null,
+	options: ResolveApiKeyOptions = {},
+): string | null {
+	const provided = input?.supermemoryApiKey?.trim()
+	if (provided) return provided
+	if (options.allowEnvironment === false) return null
+	return process.env.SUPERMEMORY_API_KEY?.trim() || null
+}
+
+export function resolveOpenAiApiKey(
+	input?: Partial<PlaygroundApiKeys> | null,
+	options: ResolveApiKeyOptions = {},
+): string | null {
+	const provided = input?.openaiApiKey?.trim()
+	if (provided) return provided
+	if (options.allowEnvironment === false) return null
+	return process.env.OPENAI_API_KEY?.trim() || null
+}
+
 export function resolveApiKeys(
 	input?: Partial<PlaygroundApiKeys> | null,
+	options: ResolveApiKeyOptions = {},
 ): PlaygroundApiKeys | null {
-	const supermemoryApiKey =
-		input?.supermemoryApiKey?.trim() || process.env.SUPERMEMORY_API_KEY?.trim()
-	const openaiApiKey =
-		input?.openaiApiKey?.trim() || process.env.OPENAI_API_KEY?.trim()
+	const supermemoryApiKey = resolveSupermemoryApiKey(input, options)
+	const openaiApiKey = resolveOpenAiApiKey(input, options)
 
 	if (!supermemoryApiKey || !openaiApiKey) return null
 
@@ -21,7 +44,7 @@ export function resolveApiKeys(
 export function readStoredApiKeys(): Partial<PlaygroundApiKeys> {
 	if (typeof window === "undefined") return {}
 	try {
-		const raw = localStorage.getItem(API_KEYS_STORAGE_KEY)
+		const raw = sessionStorage.getItem(API_KEYS_STORAGE_KEY)
 		if (!raw) return {}
 		const parsed = JSON.parse(raw) as Partial<PlaygroundApiKeys>
 		return {
@@ -35,34 +58,10 @@ export function readStoredApiKeys(): Partial<PlaygroundApiKeys> {
 
 export function storeApiKeys(keys: Partial<PlaygroundApiKeys>) {
 	if (typeof window === "undefined") return
-	localStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(keys))
+	sessionStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(keys))
 }
 
-/** Temporarily set process env for SDKs that only read SUPERMEMORY_API_KEY from env. */
-export async function withPlaygroundEnvKeys<T>(
-	keys: PlaygroundApiKeys,
-	fn: () => Promise<T>,
-): Promise<T> {
-	const previous = {
-		SUPERMEMORY_API_KEY: process.env.SUPERMEMORY_API_KEY,
-		OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-	}
-
-	process.env.SUPERMEMORY_API_KEY = keys.supermemoryApiKey
-	process.env.OPENAI_API_KEY = keys.openaiApiKey
-
-	try {
-		return await fn()
-	} finally {
-		if (previous.SUPERMEMORY_API_KEY !== undefined) {
-			process.env.SUPERMEMORY_API_KEY = previous.SUPERMEMORY_API_KEY
-		} else {
-			delete process.env.SUPERMEMORY_API_KEY
-		}
-		if (previous.OPENAI_API_KEY !== undefined) {
-			process.env.OPENAI_API_KEY = previous.OPENAI_API_KEY
-		} else {
-			delete process.env.OPENAI_API_KEY
-		}
-	}
+export function clearStoredApiKeys() {
+	if (typeof window === "undefined") return
+	sessionStorage.removeItem(API_KEYS_STORAGE_KEY)
 }

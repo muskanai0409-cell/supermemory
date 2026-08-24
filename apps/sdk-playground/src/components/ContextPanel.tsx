@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import type { ContainerContext } from "@/lib/context-api"
 
 type ContextDocument = ContainerContext["documents"][number]
@@ -9,53 +9,104 @@ export function ContextPanel({
 	containerTag,
 	lastUserMessage,
 	refreshKey,
-	apiKeys,
+	supermemoryApiKey,
+	supermemoryKeyReady,
 }: {
 	containerTag: string
 	lastUserMessage?: string
 	refreshKey: number
-	apiKeys: { supermemoryApiKey: string; openaiApiKey: string }
+	supermemoryApiKey: string
+	supermemoryKeyReady: boolean
 }) {
 	const [context, setContext] = useState<ContainerContext | null>(null)
 	const [loading, setLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const [useQuery, setUseQuery] = useState(false)
 	const [selectedDocKey, setSelectedDocKey] = useState<string | null>(null)
+	const activeRequest = useRef<AbortController | null>(null)
 
 	const load = useCallback(async () => {
-		if (!apiKeys.supermemoryApiKey.trim()) {
-			setError("Enter Supermemory API key to load context")
+		if (!supermemoryKeyReady) {
+			setError("Enter a Supermemory API key or set SUPERMEMORY_API_KEY")
 			setContext(null)
 			return
 		}
+		const normalizedContainerTag = containerTag.trim()
+		if (!normalizedContainerTag) {
+			setError("Enter a container tag to load context")
+			setContext(null)
+			return
+		}
+
+		activeRequest.current?.abort()
+		const controller = new AbortController()
+		activeRequest.current = controller
 		setLoading(true)
 		setError(null)
 		try {
 			const res = await fetch("/api/context", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
+				signal: controller.signal,
 				body: JSON.stringify({
-					containerTag,
+					containerTag: normalizedContainerTag,
 					...(useQuery && lastUserMessage ? { query: lastUserMessage } : {}),
-					apiKeys,
+					...(supermemoryApiKey.trim()
+						? {
+								apiKeys: {
+									supermemoryApiKey: supermemoryApiKey.trim(),
+								},
+							}
+						: {}),
 				}),
 			})
 			const data = await res.json()
 			if (!data.ok) throw new Error(data.error ?? "Failed to load context")
+			if (controller.signal.aborted) return
 			setContext(data.context)
 		} catch (err) {
+			if (err instanceof DOMException && err.name === "AbortError") return
 			setError(err instanceof Error ? err.message : String(err))
 			setContext(null)
 		} finally {
-			setLoading(false)
+			if (activeRequest.current === controller) {
+				activeRequest.current = null
+				setLoading(false)
+			}
 		}
-	}, [containerTag, lastUserMessage, useQuery, apiKeys])
+	}, [
+		containerTag,
+		lastUserMessage,
+		useQuery,
+		supermemoryApiKey,
+		supermemoryKeyReady,
+	])
 
 	useEffect(() => {
-		load()
-	}, [load, refreshKey])
+		// The counter changes after a successful chat and explicitly refreshes context.
+		void refreshKey
+		if (!supermemoryKeyReady || !containerTag.trim()) {
+			activeRequest.current?.abort()
+			activeRequest.current = null
+			setLoading(false)
+			setContext(null)
+			setError(null)
+			return
+		}
+
+		const timeout = window.setTimeout(() => {
+			void load()
+		}, 500)
+
+		return () => {
+			window.clearTimeout(timeout)
+			activeRequest.current?.abort()
+		}
+	}, [load, refreshKey, supermemoryKeyReady, containerTag])
 
 	useEffect(() => {
+		// A different container must not retain the previous document selection.
+		void containerTag
 		setSelectedDocKey(null)
 	}, [containerTag])
 
@@ -71,8 +122,9 @@ export function ContextPanel({
 				</h2>
 				<button
 					type="button"
-					onClick={load}
-					className="text-xs text-zinc-400 hover:text-zinc-200"
+					onClick={() => void load()}
+					disabled={!supermemoryKeyReady || !containerTag.trim()}
+					className="text-xs text-zinc-400 hover:text-zinc-200 disabled:cursor-not-allowed disabled:text-zinc-700"
 				>
 					Refresh
 				</button>
@@ -88,6 +140,11 @@ export function ContextPanel({
 			</label>
 
 			{loading && <p className="text-xs text-zinc-500">Loading…</p>}
+			{!supermemoryKeyReady && (
+				<p className="text-xs text-zinc-500">
+					Enter a Supermemory key or set SUPERMEMORY_API_KEY to load context.
+				</p>
+			)}
 			{error && <p className="text-xs text-red-400">{error}</p>}
 
 			{context && (
@@ -128,9 +185,7 @@ export function ContextPanel({
 												<button
 													type="button"
 													onClick={() =>
-														setSelectedDocKey(
-															isSelected ? null : key,
-														)
+														setSelectedDocKey(isSelected ? null : key)
 													}
 													className={`w-full rounded border p-2 text-left text-xs transition-colors ${
 														isSelected
@@ -168,9 +223,7 @@ export function ContextPanel({
 								</ul>
 
 								{selectedDoc && (
-									<div
-										className="min-w-0 flex-1 border-l border-zinc-800 pl-2"
-									>
+									<div className="min-w-0 flex-1 border-l border-zinc-800 pl-2">
 										<DocumentMemoriesPanel doc={selectedDoc} />
 									</div>
 								)}

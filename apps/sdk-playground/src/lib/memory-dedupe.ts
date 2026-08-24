@@ -1,76 +1,75 @@
-import type { ContainerContext } from "./context-api"
+import {
+	deduplicateMemoriesForMode,
+	type ProfileWithMemories,
+} from "../../../../packages/tools/src/tools-shared"
+import { wrapMemoryContext } from "../../../../packages/tools/src/shared/memory-context"
+import {
+	convertProfileToMarkdown,
+	defaultPromptTemplate,
+} from "../../../../packages/tools/src/shared/prompt-builder"
 
-type ProfileSlice = ContainerContext["profile"]
+export type MemoryMode = "profile" | "query" | "full"
+export type MiddlewareFlavor = "ai-sdk" | "openai"
 
-/** Normalize a fact for exact comparison within retrieved context. */
-export function normalizeFactKey(text: string): string {
-	return text
-		.trim()
-		.replace(/^\[recent\]\s*/i, "")
-		.replace(/^\[\d{4}-\d{2}-\d{2}\]\s*/, "")
-		.trim()
-		.replace(/\s+/g, " ")
-		.toLowerCase()
+export interface MemoryProfileSlice {
+	static: unknown[]
+	dynamic: unknown[]
+	searchResults: unknown[]
 }
 
-function memoryText(item: unknown): string {
-	if (typeof item === "string") return item
-	if (item && typeof item === "object") {
-		const record = item as Record<string, unknown>
-		if (typeof record.memory === "string") return record.memory
-		if (typeof record.content === "string") return record.content
-		if (typeof record.chunk === "string") return record.chunk
+export interface ReconstructedMemoryBlock {
+	profile: {
+		static: string[]
+		dynamic: string[]
+		searchResults: string[]
 	}
-	return ""
+	block: string
 }
 
-/**
- * Deduplicate static → dynamic → search (same priority as @supermemory/tools middleware).
- */
-export function dedupeProfileForMode(
-	mode: "profile" | "query" | "full",
-	profile: ProfileSlice,
-): ProfileSlice {
-	const injectsProfile = mode !== "query"
-	const staticItems = injectsProfile ? profile.static : []
-	const dynamicItems = injectsProfile ? profile.dynamic : []
-	const searchItems = profile.searchResults
-
-	const seen = new Set<string>()
-	const staticOut: unknown[] = []
-	const dynamicOut: unknown[] = []
-	const searchOut: unknown[] = []
-
-	for (const item of staticItems) {
-		const text = memoryText(item).trim()
-		if (!text) continue
-		const key = normalizeFactKey(text)
-		if (!key || seen.has(key)) continue
-		seen.add(key)
-		staticOut.push(item)
+/** Reconstruct the exact SDK-owned block from a post-response profile snapshot. */
+export function reconstructSdkMemoryBlock(
+	mode: MemoryMode,
+	profile: MemoryProfileSlice,
+	flavor: MiddlewareFlavor,
+): ReconstructedMemoryBlock {
+	const deduplicated = deduplicateMemoriesForMode(
+		mode,
+		profile as ProfileWithMemories,
+	)
+	const visibleProfile = {
+		static: deduplicated.static,
+		dynamic: deduplicated.dynamic,
+		searchResults: mode === "profile" ? [] : deduplicated.searchResults,
 	}
 
-	for (const item of dynamicItems) {
-		const text = memoryText(item).trim()
-		if (!text) continue
-		const key = normalizeFactKey(text)
-		if (!key || seen.has(key)) continue
-		seen.add(key)
-		dynamicOut.push(item)
-	}
+	const userMemories =
+		mode === "query"
+			? ""
+			: convertProfileToMarkdown({
+					profile: {
+						static: visibleProfile.static,
+						dynamic: visibleProfile.dynamic,
+					},
+					searchResults: { results: [] },
+				})
+	const generalSearchMemories =
+		mode !== "profile" && visibleProfile.searchResults.length > 0
+			? `Search results for user's recent message: \n${visibleProfile.searchResults
+					.map((memory) => `- ${memory}`)
+					.join("\n")}`
+			: ""
 
-	for (const item of searchItems) {
-		const text = memoryText(item).trim()
-		if (!text) continue
-		const key = normalizeFactKey(text)
-		if (!key || seen.has(key)) continue
-		seen.add(key)
-		searchOut.push(item)
-	}
+	const memories =
+		flavor === "ai-sdk"
+			? defaultPromptTemplate({
+					userMemories,
+					generalSearchMemories,
+					searchResults: [],
+				})
+			: `${userMemories}\n${generalSearchMemories}`.trim()
 
 	return {
-		static: staticOut,
-		dynamic: dynamicOut,
-		searchResults: mode === "profile" ? [] : searchOut,
+		profile: visibleProfile,
+		block: wrapMemoryContext(memories),
 	}
 }

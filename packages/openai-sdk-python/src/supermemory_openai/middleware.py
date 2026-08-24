@@ -195,6 +195,7 @@ async def supermemory_profile_search(
     """Search for memories using the SuperMemory profile API."""
     payload = {
         "containerTag": container_tag,
+        "include": ["static", "dynamic"],
     }
     if query_text:
         payload["q"] = query_text

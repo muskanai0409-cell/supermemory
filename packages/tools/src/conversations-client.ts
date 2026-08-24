@@ -45,6 +45,8 @@ export interface AddConversationResponse {
 	status: string
 }
 
+const CONVERSATION_REQUEST_TIMEOUT_MS = 30_000
+
 /**
  * Adds a conversation to Supermemory using the /v4/conversations endpoint
  *
@@ -89,6 +91,8 @@ export async function addConversation(
 			metadata: params.metadata,
 			entityContext: params.entityContext,
 		}),
+		redirect: "error",
+		signal: AbortSignal.timeout(CONVERSATION_REQUEST_TIMEOUT_MS),
 	})
 
 	if (!response.ok) {

@@ -272,6 +272,8 @@ import { withSupermemory } from "@supermemory/tools/openai"
 const openaiWithSupermemory = withSupermemory(openai, {
   containerTag: "user-123",      // Required: identifies the user/container
   customId: "conversation-456",  // Required: groups messages into the same document 
+  apiKey: process.env.SUPERMEMORY_API_KEY, // Optional env fallback
+  baseUrl: process.env.SUPERMEMORY_BASE_URL,
   mode: "full",
   addMemory: "always",           // Default: "always"
   verbose: true,
@@ -296,6 +298,8 @@ The middleware supports the same configuration options as the AI SDK version:
 const openaiWithSupermemory = withSupermemory(openai, {
   containerTag: "user-123",      // Required: identifies the user/container
   customId: "conversation-456",  // Required: groups messages for contextual memory
+  apiKey: process.env.SUPERMEMORY_API_KEY, // Optional; captured per client
+  baseUrl: process.env.SUPERMEMORY_BASE_URL,
   mode: "full",                  // "profile" | "query" | "full"
   addMemory: "always",           // "always" (default) | "never"
   verbose: true,                 // Enable detailed logging
@@ -320,6 +324,8 @@ export async function POST(req: Request) {
   const openaiWithSupermemory = withSupermemory(openai, {
     containerTag: "user-123",
     customId: conversationId,
+    apiKey: process.env.SUPERMEMORY_API_KEY,
+    baseUrl: process.env.SUPERMEMORY_BASE_URL,
     mode: "full",
     addMemory: "always",
     verbose: true,

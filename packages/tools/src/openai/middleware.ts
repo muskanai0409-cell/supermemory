@@ -1,6 +1,11 @@
 import type OpenAI from "openai"
+import { APIPromise } from "openai/core"
 import Supermemory from "supermemory"
-import { addConversation } from "../conversations-client"
+import {
+	addConversation,
+	type ContentPart as ConversationContentPart,
+	type ConversationMessage,
+} from "../conversations-client"
 import { deduplicateMemoriesForMode } from "../tools-shared"
 import { createLogger, type Logger } from "../vercel/logger"
 import { convertProfileToMarkdown } from "../vercel/util"
@@ -11,6 +16,53 @@ const normalizeBaseUrl = (url?: string): string => {
 }
 
 const PROFILE_REQUEST_TIMEOUT_MS = 30_000
+
+const deferAPIPromise = <T>(
+	start: () => Promise<{ request: APIPromise<T> }>,
+): APIPromise<T> => {
+	const ready = start()
+
+	const responsePromise = ready.then(async ({ request }) => ({
+		response: await request.asResponse(),
+		options: {} as never,
+		controller: new AbortController(),
+	}))
+
+	return new APIPromise<T>(responsePromise, async () => {
+		const { request } = await ready
+		return await request
+	})
+}
+
+const convertConversationContent = (
+	content: unknown,
+): string | ConversationContentPart[] => {
+	if (typeof content === "string") return content
+	if (!Array.isArray(content)) return ""
+
+	const converted: ConversationContentPart[] = []
+	for (const value of content) {
+		if (!value || typeof value !== "object") continue
+		const part = value as {
+			type?: unknown
+			text?: unknown
+			image_url?: { url?: unknown }
+		}
+		if (part.type === "text" && typeof part.text === "string") {
+			converted.push({ type: "text", text: part.text })
+		} else if (
+			part.type === "image_url" &&
+			typeof part.image_url?.url === "string"
+		) {
+			converted.push({
+				type: "image_url",
+				imageUrl: { url: part.image_url.url },
+			})
+		}
+	}
+
+	return converted
+}
 
 export interface OpenAIMiddlewareOptions {
 	/** Container tag/identifier for memory search (e.g., user ID, project ID). Required. */
@@ -100,9 +152,11 @@ const supermemoryProfileSearch = async (
 		? JSON.stringify({
 				q: queryText,
 				containerTag: containerTag,
+				include: ["static", "dynamic"],
 			})
 		: JSON.stringify({
 				containerTag: containerTag,
+				include: ["static", "dynamic"],
 			})
 
 	try {
@@ -336,27 +390,24 @@ const addMemoryTool = async (
 			const conversationId = customId.replace("conversation:", "")
 
 			// Convert OpenAI messages to conversation format
-			const conversationMessages = messages.map((msg) => ({
-				role: msg.role as "user" | "assistant" | "system" | "tool",
-				content:
-					typeof msg.content === "string"
-						? msg.content
-						: Array.isArray(msg.content)
-							? msg.content
-									.filter((c) => c.type === "text")
-									.map((c) => ({
-										type: "text" as const,
-										text: (c as { type: "text"; text: string }).text,
-									}))
-							: "",
-				...("name" in msg && msg.name && { name: msg.name }),
-				...("tool_calls" in msg &&
-					msg.tool_calls && { tool_calls: msg.tool_calls }),
-				...("tool_call_id" in msg &&
-					msg.tool_call_id && {
-						tool_call_id: msg.tool_call_id,
-					}),
-			}))
+			const conversationMessages: ConversationMessage[] = messages.map(
+				(msg) => ({
+					role:
+						msg.role === "developer"
+							? "system"
+							: msg.role === "function"
+								? "tool"
+								: msg.role,
+					content: convertConversationContent(msg.content),
+					...("name" in msg && msg.name && { name: msg.name }),
+					...("tool_calls" in msg &&
+						msg.tool_calls && { tool_calls: msg.tool_calls }),
+					...("tool_call_id" in msg &&
+						msg.tool_call_id && {
+							tool_call_id: msg.tool_call_id,
+						}),
+				}),
+			)
 
 			const response = await addConversation({
 				conversationId,
@@ -538,7 +589,7 @@ export function createOpenAIMiddleware(
 		return memories
 	}
 
-	const createResponsesWithMemory = async (
+	const prepareResponsesWithMemory = async (
 		params: Parameters<typeof originalResponsesCreate>[0],
 		requestOptions?: OpenAI.RequestOptions,
 	) => {
@@ -552,11 +603,13 @@ export function createOpenAIMiddleware(
 
 		if (mode !== "profile" && !input) {
 			logger.debug("No input found for Responses API, skipping memory search")
-			return originalResponsesCreate.call(
-				openaiClient.responses,
-				params,
-				requestOptions,
-			)
+			return {
+				request: originalResponsesCreate.call(
+					openaiClient.responses,
+					params,
+					requestOptions,
+				),
+			}
 		}
 
 		logger.info("Starting memory search for Responses API", {
@@ -594,31 +647,58 @@ export function createOpenAIMiddleware(
 			? `${params.instructions || ""}\n\n${memories}`.trim()
 			: params.instructions
 
-		return originalResponsesCreate.call(
-			openaiClient.responses,
-			{
-				...params,
-				instructions: enhancedInstructions,
-			},
-			requestOptions,
-		)
+		return {
+			request: originalResponsesCreate.call(
+				openaiClient.responses,
+				{
+					...params,
+					instructions: enhancedInstructions,
+				},
+				requestOptions,
+			),
+		}
 	}
 
-	const createWithMemory = async (
+	const createResponsesWithMemory = (
+		params: Parameters<typeof originalResponsesCreate>[0],
+		requestOptions?: OpenAI.RequestOptions,
+	) => deferAPIPromise(() => prepareResponsesWithMemory(params, requestOptions))
+
+	const prepareCreateWithMemory = async (
 		params: OpenAI.Chat.Completions.ChatCompletionCreateParams,
 		requestOptions?: OpenAI.RequestOptions,
 	) => {
 		const messages = Array.isArray(params.messages) ? params.messages : []
+		const userMessage = getLastUserMessage(messages)
+		const hasUserMessage = messages.some((message) => message.role === "user")
+		const shouldPersist =
+			addMemory === "always" &&
+			(customId ? hasUserMessage : Boolean(userMessage.trim()))
+		const memoryContent = customId
+			? getConversationContent(messages)
+			: userMessage
+		const memoryCustomId = customId ? `conversation:${customId}` : undefined
 
-		if (mode !== "profile") {
-			const userMessage = getLastUserMessage(messages)
-			if (!userMessage) {
-				logger.debug("No user message found, skipping memory search")
-				return originalCreate.call(
+		if (mode !== "profile" && !userMessage) {
+			if (shouldPersist) {
+				await addMemoryTool(
+					client,
+					containerTag,
+					memoryContent,
+					memoryCustomId,
+					logger,
+					messages,
+					apiKey,
+					baseUrl,
+				)
+			}
+			logger.debug("No textual user message found, skipping memory search")
+			return {
+				request: originalCreate.call(
 					openaiClient.chat.completions,
 					params,
 					requestOptions,
-				)
+				),
 			}
 		}
 
@@ -630,27 +710,19 @@ export function createOpenAIMiddleware(
 
 		const operations: Promise<unknown>[] = []
 
-		if (addMemory === "always") {
-			const userMessage = getLastUserMessage(messages)
-			if (userMessage?.trim()) {
-				const content = customId
-					? getConversationContent(messages)
-					: userMessage
-				const memoryCustomId = customId ? `conversation:${customId}` : undefined
-
-				operations.push(
-					addMemoryTool(
-						client,
-						containerTag,
-						content,
-						memoryCustomId,
-						logger,
-						messages,
-						apiKey,
-						baseUrl,
-					),
-				)
-			}
+		if (shouldPersist) {
+			operations.push(
+				addMemoryTool(
+					client,
+					containerTag,
+					memoryContent,
+					memoryCustomId,
+					logger,
+					messages,
+					apiKey,
+					baseUrl,
+				),
+			)
 		}
 
 		operations.push(
@@ -658,17 +730,26 @@ export function createOpenAIMiddleware(
 		)
 
 		const results = await Promise.all(operations)
-		const enhancedMessages = results[results.length - 1] // Enhanced messages result is always last
+		const enhancedMessages = results[
+			results.length - 1
+		] as OpenAI.Chat.Completions.ChatCompletionMessageParam[] // Enhanced messages result is always last
 
-		return originalCreate.call(
-			openaiClient.chat.completions,
-			{
-				...params,
-				messages: enhancedMessages,
-			},
-			requestOptions,
-		)
+		return {
+			request: originalCreate.call(
+				openaiClient.chat.completions,
+				{
+					...params,
+					messages: enhancedMessages,
+				},
+				requestOptions,
+			),
+		}
 	}
+
+	const createWithMemory = (
+		params: OpenAI.Chat.Completions.ChatCompletionCreateParams,
+		requestOptions?: OpenAI.RequestOptions,
+	) => deferAPIPromise(() => prepareCreateWithMemory(params, requestOptions))
 
 	openaiClient.chat.completions.create =
 		createWithMemory as typeof originalCreate

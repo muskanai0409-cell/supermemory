@@ -21,7 +21,12 @@ from pipecat.processors.aggregators.llm_context import LLMContext
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 
 from .exceptions import ConfigurationError, MemoryRetrievalError, MemoryStorageError
-from .utils import _field, deduplicate_memories, format_memories_to_text
+from .utils import (
+    _field,
+    deduplicate_memories,
+    escape_memory_delimiters,
+    format_memories_to_text,
+)
 
 # Pipecat 1.0 removed the legacy message and OpenAI-specific context frames.
 # Keep them optional so the integration supports both the declared 0.0.98
@@ -387,7 +392,8 @@ class SupermemoryPipecatService(FrameProcessor):
         if not memory_text:
             return
 
-        tagged_memory = f"{MEMORY_TAG_START}\n{memory_text}\n{MEMORY_TAG_END}"
+        safe_memory_text = escape_memory_delimiters(memory_text)
+        tagged_memory = f"{MEMORY_TAG_START}\n{safe_memory_text}\n{MEMORY_TAG_END}"
 
         inject_to_system = self.params.inject_mode == "system" or (
             self.params.inject_mode == "auto" and self._audio_frames_detected

@@ -3,15 +3,19 @@
 import asyncio
 import inspect
 import os
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, Literal, Optional, Union, cast
 
 import supermemory
 from openai import AsyncOpenAI, OpenAI
 from openai.types.chat import (
+    ChatCompletionContentPartTextParam,
+    ChatCompletionDeveloperMessageParam,
     ChatCompletionMessageParam,
     ChatCompletionSystemMessageParam,
 )
+from typing_extensions import TypeGuard
 
 from .exceptions import (
     SupermemoryAPIError,
@@ -54,6 +58,132 @@ class SupermemoryProfileSearch:
     def __init__(self, data: dict[str, Any]):
         self.profile: dict[str, Any] = data.get("profile", {})
         self.search_results: dict[str, Any] = data.get("searchResults", {})
+
+
+ChatInstructionMessage = Union[
+    ChatCompletionDeveloperMessageParam,
+    ChatCompletionSystemMessageParam,
+]
+
+
+def _is_chat_instruction_message(
+    message: ChatCompletionMessageParam,
+) -> TypeGuard[ChatInstructionMessage]:
+    """Return whether a chat message can carry model instructions."""
+    return message.get("role") in ("developer", "system")
+
+
+def _update_instruction_message_memory_context(
+    message: ChatInstructionMessage,
+    memories: Optional[str],
+) -> ChatInstructionMessage:
+    """Replace or strip owned context without dropping structured instructions."""
+    content = message.get("content", "")
+    if isinstance(content, str):
+        updated_content = (
+            replace_memory_context(content, memories)
+            if memories is not None
+            else strip_memory_context(content)
+        )
+        return cast(
+            ChatInstructionMessage,
+            {**message, "content": updated_content},
+        )
+
+    if not isinstance(content, Iterable) or isinstance(
+        content, (bytes, bytearray, dict)
+    ):
+        # OpenAI's supported instruction content is a string or an iterable of
+        # text parts. Preserve an unexpected value instead of erasing it.
+        return message
+
+    injected = False
+    updated_parts: list[ChatCompletionContentPartTextParam] = []
+    for part in content:
+        if not isinstance(part, dict):
+            # Defensive compatibility for a malformed/future iterable. The cast
+            # keeps the value intact rather than deleting caller-authored data.
+            updated_parts.append(cast(ChatCompletionContentPartTextParam, part))
+            continue
+
+        text = part.get("text")
+        if part.get("type") != "text" or not isinstance(text, str):
+            updated_parts.append(part)
+            continue
+
+        if memories is not None and not injected:
+            updated_text = replace_memory_context(text, memories)
+            injected = True
+        else:
+            updated_text = strip_memory_context(text)
+
+        updated_parts.append(
+            cast(
+                ChatCompletionContentPartTextParam,
+                {**part, "text": updated_text},
+            )
+        )
+
+    if memories is not None and not injected:
+        memory_context = wrap_memory_context(memories)
+        if memory_context:
+            updated_parts.append({"type": "text", "text": memory_context})
+
+    return cast(
+        ChatInstructionMessage,
+        {**message, "content": updated_parts},
+    )
+
+
+def _update_chat_memory_contexts(
+    messages: list[ChatCompletionMessageParam],
+    memories: Optional[str] = None,
+) -> list[ChatCompletionMessageParam]:
+    """Inject once into developer-first instructions and strip every stale block."""
+    developer_index = next(
+        (
+            index
+            for index, message in enumerate(messages)
+            if message.get("role") == "developer"
+        ),
+        -1,
+    )
+    injection_index = developer_index
+    if injection_index < 0:
+        injection_index = next(
+            (
+                index
+                for index, message in enumerate(messages)
+                if message.get("role") == "system"
+            ),
+            -1,
+        )
+
+    if injection_index < 0:
+        if memories is None:
+            return messages
+        memory_context = wrap_memory_context(memories)
+        if not memory_context:
+            return messages
+        system_message: ChatCompletionSystemMessageParam = {
+            "role": "system",
+            "content": memory_context,
+        }
+        return [system_message, *messages]
+
+    enhanced: list[ChatCompletionMessageParam] = []
+    for index, message in enumerate(messages):
+        if not _is_chat_instruction_message(message):
+            enhanced.append(message)
+            continue
+
+        selected_memories = (
+            memories if memories is not None and index == injection_index else None
+        )
+        enhanced.append(
+            _update_instruction_message_memory_context(message, selected_memories)
+        )
+    return enhanced
 
 
 async def supermemory_profile_search(
@@ -129,7 +259,9 @@ async def add_system_prompt(
     base_url: str,
 ) -> list[ChatCompletionMessageParam]:
     """Add memory-enhanced system prompts to chat completion messages."""
-    system_prompt_exists = any(msg.get("role") == "system" for msg in messages)
+    instruction_prompt_exists = any(
+        _is_chat_instruction_message(message) for message in messages
+    )
 
     query_text = get_last_user_message(messages) if mode != "profile" else ""
 
@@ -211,42 +343,12 @@ async def add_system_prompt(
             },
         )
 
-    if system_prompt_exists:
-        logger.debug("Replaced Supermemory context in existing system prompt")
-        enhanced: list[ChatCompletionMessageParam] = []
-        injected = False
-        for msg in messages:
-            if msg.get("role") != "system":
-                enhanced.append(msg)
-                continue
-            content = msg.get("content", "")
-            existing = content if isinstance(content, str) else ""
-            if not injected:
-                enhanced.append(
-                    cast(
-                        ChatCompletionMessageParam,
-                        {**msg, "content": replace_memory_context(existing, memories)},
-                    )
-                )
-                injected = True
-            else:
-                enhanced.append(
-                    cast(
-                        ChatCompletionMessageParam,
-                        {**msg, "content": strip_memory_context(existing)},
-                    )
-                )
-        return enhanced
+    if instruction_prompt_exists:
+        logger.debug("Replaced Supermemory context in existing instruction prompt")
+    elif memories:
+        logger.debug("Instruction prompt does not exist, created system prompt")
 
-    if not memories:
-        return messages
-
-    logger.debug("System prompt does not exist, created system prompt with memories")
-    system_message: ChatCompletionSystemMessageParam = {
-        "role": "system",
-        "content": wrap_memory_context(memories),
-    }
-    return [system_message] + messages
+    return _update_chat_memory_contexts(messages, memories)
 
 
 async def add_memory_tool(
@@ -386,7 +488,10 @@ class SupermemoryOpenAIWrapper:
         **kwargs: Any,
     ) -> Any:
         """Async version of create with memory injection."""
-        messages = kwargs.get("messages", [])
+        # OpenAI accepts any Iterable here. Materialize it once because memory
+        # extraction and injection both traverse the messages.
+        messages = list(kwargs.get("messages", []))
+        kwargs["messages"] = messages
 
         if self._options.add_memory == "always":
             user_message = get_last_user_message(messages)
@@ -450,6 +555,7 @@ class SupermemoryOpenAIWrapper:
             user_message = get_last_user_message(messages)
             if not user_message:
                 self._logger.debug("No user message found, skipping memory search")
+                kwargs["messages"] = _update_chat_memory_contexts(messages)
                 return await original_create(**kwargs)
 
         self._logger.info(
@@ -480,7 +586,8 @@ class SupermemoryOpenAIWrapper:
     ) -> Any:
         """Sync version of create with memory injection."""
         # For sync clients, we implement a simplified version without background tasks
-        messages = kwargs.get("messages", [])
+        messages = list(kwargs.get("messages", []))
+        kwargs["messages"] = messages
 
         # Handle memory addition synchronously if needed
         if self._options.add_memory == "always":
@@ -535,6 +642,7 @@ class SupermemoryOpenAIWrapper:
             user_message = get_last_user_message(messages)
             if not user_message:
                 self._logger.debug("No user message found, skipping memory search")
+                kwargs["messages"] = _update_chat_memory_contexts(messages)
                 return original_create(**kwargs)
 
         self._logger.info(

@@ -6,9 +6,22 @@ from typing import Any, Dict, List, Union
 
 
 _DYNAMIC_DATE_PREFIX = re.compile(
-    r"^\s*(?:\[Recent\]\s*)?\[\d{4}-\d{2}-\d{2}\]\s*",
+    r"^\s*(?:\[recent\]\s*)?(?:\[\d{4}-\d{2}-\d{2}\]\s*)?",
     re.IGNORECASE,
 )
+
+_USER_MEMORIES_TAG_PATTERN = re.compile(
+    r"<\s*/?\s*user_memories\b[^>]*>",
+    re.IGNORECASE,
+)
+
+
+def escape_memory_delimiters(text: str) -> str:
+    """Neutralize reserved memory-wrapper tags inside formatted content."""
+    return _USER_MEMORIES_TAG_PATTERN.sub(
+        lambda match: match.group(0).replace("<", "&lt;").replace(">", "&gt;"),
+        text,
+    )
 
 
 def get_last_user_message(messages: List[Dict[str, Any]]) -> str | None:

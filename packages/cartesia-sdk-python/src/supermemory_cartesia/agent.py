@@ -14,7 +14,12 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from .exceptions import ConfigurationError, MemoryRetrievalError
-from .utils import _field, deduplicate_memories, format_memories_to_text
+from .utils import (
+    _field,
+    deduplicate_memories,
+    escape_memory_delimiters,
+    format_memories_to_text,
+)
 
 try:
     import supermemory
@@ -265,7 +270,8 @@ class SupermemoryCartesiaAgent:
         if not memory_text:
             return None
 
-        return f"{MEMORY_TAG_START}\n{memory_text}\n{MEMORY_TAG_END}"
+        safe_memory_text = escape_memory_delimiters(memory_text)
+        return f"{MEMORY_TAG_START}\n{safe_memory_text}\n{MEMORY_TAG_END}"
 
     def _extract_user_message(self, event: Any) -> Optional[str]:
         """Extract user text from a UserTurnEnded event."""

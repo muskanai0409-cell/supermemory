@@ -26,7 +26,11 @@ describe("OpenAI middleware memory context", () => {
 				}),
 			}),
 		)
-		const originalCreate = vi.fn().mockResolvedValue({ choices: [] })
+		const originalCreate = vi.fn(() =>
+			Object.assign(Promise.resolve({ choices: [] }), {
+				asResponse: async () => new Response(),
+			}),
+		)
 		const client = {
 			chat: { completions: { create: originalCreate } },
 		} as unknown as OpenAI

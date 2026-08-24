@@ -1,6 +1,8 @@
 // Types
 export type {
 	MemoryPromptData,
+	MemorySearchResult,
+	ProfileSearchResult,
 	PromptTemplate,
 	MemoryMode,
 	AddMemoryMode,

@@ -73,6 +73,7 @@ const createMockMessageList = (): MessageList & {
 	const calls: { method: string; args: unknown[] }[] = []
 	return {
 		calls,
+		clearSystemMessages: vi.fn(),
 		addSystem: vi.fn((content: string, _id?: string) => {
 			calls.push({ method: "addSystem", args: [content, _id] })
 		}),

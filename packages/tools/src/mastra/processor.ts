@@ -139,6 +139,11 @@ export class SupermemoryInputProcessor implements Processor {
 	async processInput(args: ProcessInputArgs): Promise<ProcessInputResult> {
 		const { messages, messageList, requestContext } = args
 
+		// Mastra owns tagged system messages by tag. Clear the previous value on
+		// every invocation so empty, skipped, cached, fresh, and error paths cannot
+		// leave stale Supermemory context behind.
+		messageList.clearSystemMessages("supermemory")
+
 		try {
 			const queryText = extractQueryText(
 				messages as unknown as Array<{

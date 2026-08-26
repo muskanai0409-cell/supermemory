@@ -80,6 +80,8 @@ import {
 } from "@lib/constants"
 import { useCustomer } from "autumn-js/react"
 import { toast } from "sonner"
+import { connectorPause } from "@/lib/connector-availability"
+import { useConnectorNotify } from "@/lib/connector-notify"
 import { analytics } from "@/lib/analytics"
 import type { BrainMode } from "./types"
 import { usePromoCode } from "@/hooks/use-promo-code"
@@ -374,6 +376,8 @@ export function StepSources({
 		return !connectorAccess
 	}
 
+	const notify = useConnectorNotify()
+
 	const setState = (id: SourceId, state: SourceState) => {
 		onChange({ ...values, connected: { ...values.connected, [id]: state } })
 	}
@@ -383,6 +387,11 @@ export function StepSources({
 		id: SourceId,
 	) => {
 		analytics.onboardingIntegrationClicked({ integration: provider })
+		if (connectorPause(provider)) {
+			notify.request(provider)
+			setState(id, "waitlist")
+			return
+		}
 		setState(id, "connecting")
 		try {
 			const metadata: Record<string, string> = {}
@@ -954,13 +963,15 @@ function GoogleDriveSourceCard({
 		id: SourceId,
 	) => void
 }) {
+	const pause = connectorPause("google-drive")
+
 	return (
 		<SourceCard
 			title="Google Drive"
 			blurb="Docs, sheets, slides — the working memory of your team."
 			icon={<GoogleDrive className="size-7" />}
 			state={values.connected.drive ?? "idle"}
-			ctaLabel="Connect"
+			ctaLabel={pause ? "Notify me" : "Connect"}
 			locked={isLocked("pro")}
 			requiredPlan="pro"
 			perks={[
@@ -972,7 +983,12 @@ function GoogleDriveSourceCard({
 				connectRealProvider("google-drive", "drive"),
 			)}
 			headerNote={
-				values.driveScope === "full" ? (
+				pause ? (
+					<p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-[#F5A524] font-medium">
+						<AlertTriangle className="size-3 shrink-0" />
+						{pause.message}
+					</p>
+				) : values.driveScope === "full" ? (
 					<p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-[#FF8A47] font-medium">
 						<AlertTriangle className="size-3 shrink-0" />
 						Full Drive can exhaust your monthly usage.
@@ -1283,7 +1299,9 @@ function SourceCard({
 				{isDone ? (
 					<span className="inline-flex items-center gap-1.5 rounded-full border border-[#2261CA55] bg-[#2261CA1A] px-2.5 py-1 text-[12px] font-semibold text-[#4BA0FA] shrink-0 mt-0.5">
 						<Check className="size-3.5" />
-						{state === "waitlist" ? "Requested" : (doneLabel ?? "Connected")}
+						{state === "waitlist"
+							? "We'll email you"
+							: (doneLabel ?? "Connected")}
 					</span>
 				) : (
 					<Button

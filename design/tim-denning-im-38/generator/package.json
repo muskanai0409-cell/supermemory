@@ -1,0 +1,7 @@
+{
+  "name": "im-38-mapped",
+  "private": true,
+  "description": "Generator for the 'I'm 38, Mapped' explainer graphic",
+  "scripts": { "build": "node build.js && node card.js" },
+  "dependencies": { "alea": "^1.0.1", "d3-contour": "^4.0.2", "simplex-noise": "^4.0.3" }
+}

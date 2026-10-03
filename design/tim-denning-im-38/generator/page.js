@@ -1,4 +1,5 @@
 (() => {
+  if (!document.documentElement.lang) document.documentElement.lang = 'en';
   const reduce = matchMedia('(prefers-reduced-motion: reduce)');
 
   // ---- course legs: straight purple lines that stop short of each circle ----
@@ -58,14 +59,26 @@
   bars.forEach(bar => {
     const pick = e => {
       const r = bar.getBoundingClientRect();
-      setAge(20 + Math.max(0, Math.min(19, Math.floor((e.clientX - r.left) / r.width * 20))), true);
+      setAge(20 + Math.max(0, Math.min(19, Math.floor((e.clientX - r.left) / r.width * 20))), true, bar.contains(document.activeElement) ? bar : null);
     };
-    bar.addEventListener('pointerdown', e => { if (e.button > 0) return; try { bar.setPointerCapture(e.pointerId); } catch (_) {} pick(e); });
-    bar.addEventListener('pointermove', e => { if (bar.hasPointerCapture && bar.hasPointerCapture(e.pointerId)) pick(e); });
+    // a touch only picks on a tap or a sideways drag, so a vertical page swipe over the bar never sets an age
+    let sx = 0, sy = 0, drag = false;
+    bar.addEventListener('pointerdown', e => {
+      if (e.button > 0) return;
+      try { bar.setPointerCapture(e.pointerId); } catch (_) {}
+      sx = e.clientX; sy = e.clientY; drag = e.pointerType !== 'touch';
+      if (drag) pick(e);
+    });
+    bar.addEventListener('pointermove', e => {
+      if (!(bar.hasPointerCapture && bar.hasPointerCapture(e.pointerId))) return;
+      if (!drag && Math.abs(e.clientX - sx) > Math.abs(e.clientY - sy)) drag = true;
+      if (drag) pick(e);
+    });
+    bar.addEventListener('pointerup', e => { if (e.pointerType === 'touch' && !drag) pick(e); });
     bar.addEventListener('click', e => { const b = e.target.closest('.yr'); if (b && e.detail === 0) setAge(+b.dataset.age, true); });
     bar.addEventListener('keydown', e => {
       const cur = +(e.target.dataset && e.target.dataset.age || 0); if (!cur) return;
-      const step = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key];
+      const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
       const a = step ? cur + step : e.key === 'Home' ? 20 : e.key === 'End' ? 39 : (e.key === ' ' || e.key === 'Enter') ? cur : 0;
       if (a) { e.preventDefault(); setAge(Math.max(20, Math.min(39, a)), true, bar); }
     });
@@ -92,7 +105,7 @@
   }
   function track() {
     ticking = false;
-    const y = innerHeight * 0.48; let cur = null;
+    const y = (parseFloat(getComputedStyle(ctls[0]).scrollMarginTop) || innerHeight * 0.38) + 32; let cur = null;
     for (const c of ctls) { if (c.getBoundingClientRect().top <= y) cur = c; else break; }
     if (cur && cur.getBoundingClientRect().bottom < 0) cur = null;
     mark(cur);

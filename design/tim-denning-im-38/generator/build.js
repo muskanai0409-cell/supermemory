@@ -102,7 +102,7 @@ const OVERVIEW = `
   </div>
   <div class="setter">
     <p class="label">Course setter’s note</p>
-    <p>Tim Denning wrote this at 38 for anyone in their 20s or 30s. Each lesson is a line or two, and blunt. On this map every lesson is a control, a circle you have to reach. Run them in order and you have his argument.</p>
+    <p>Tim Denning wrote this at 38 for anyone in their 20s or 30s. Each lesson opens with a blunt line or two. On this map every lesson is a control, a circle you have to reach. Run them all and you have his advice.</p>
     <p>His words are printed in purple, exactly as he wrote them. We drew the ${N} lessons we could trace to his published text, so the essay may hold a few more. Where we could not confirm his exact words, the lesson is in black.</p>
   </div>
 </section>`;
@@ -129,7 +129,7 @@ const ROUTE = `
     <h2 class="h2" id="route-h">The difference shows at 35</h2>
   </div>
   <figure class="route-fig">
-    <div class="route-draw" role="img" aria-label="Drawing of two routes from a start triangle to a finish circle marked 38. A purple route runs straight over a steep hill. The conventional path loops the long way round it, crowded with people. A dashed line marks age 35. By then the purple route is past the summit and the crowd is still on the flat road, beside his words: regrets which ages you faster.">${W.routeChoice()}</div>
+    <div class="route-draw" role="img" aria-label="Drawing of two routes from a start triangle, your 20s, to a finish circle, Tim at 38. Took risks: a purple route runs straight over a steep hill, steep, rough and direct. Played safe: the conventional path loops the long way round it, flat and crowded with people. A dashed line marks age 35. By then the purple route is past the summit and the crowd is still on the flat road, beside his words “regrets which ages you faster.”">${W.routeChoice()}</div>
     <figcaption class="note">Not to scale. In orienteering, masters classes start at age 35.</figcaption>
   </figure>
   <blockquote class="route-quote" cite="${SUB_URL}">
@@ -146,7 +146,7 @@ LESSONS.forEach((l, i) => {
   if (l.group) {
     const [s, e] = groupRange(l.group);
     const st = strips[l.group];
-    ctl += `<li class="strip" role="none" style="--h:${st.h}px;--hm:${st.hm}px"><div class="terrain" aria-hidden="true">${st.svg}</div><h3 class="strip-label"><span class="ko">${THEMES[l.group].long} · controls ${s}–${e}</span></h3></li>`;
+    ctl += `<li class="strip" style="--h:${st.h}px;--hm:${st.hm}px"><div class="terrain" aria-hidden="true">${st.svg}</div><h3 class="strip-label"><span class="ko">${THEMES[l.group].long} · controls ${s}–${e}</span></h3></li>`;
   }
   const cx = Math.round(6 + wander(i) * 26), cxm = Math.round(wander(i + 40) * 7);
   let headHtml, featTerrain = '', pre = false;

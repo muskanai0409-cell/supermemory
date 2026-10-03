@@ -66,7 +66,7 @@ const LESSONS = [
     head: 'Money isn’t evil. It’s a resource that’ll help you reach personal freedom.' },
   { theme: 'money', card: 'Read finance books. Invest early.',
     head: 'Read every popular finance book and invest money early on.' },
-  { theme: 'money', cardHtml: 'Read <i>The Bitcoin Standard</i>. Then buy.', card: 'Read The Bitcoin Standard. Then buy.',
+  { theme: 'money', cardHtml: 'Read <i>The Bitcoin Standard</i>. Buy Bitcoin.', card: 'Read The Bitcoin Standard. Buy Bitcoin.',
     head: 'Read “The Bitcoin Standard.” Then buy Bitcoin before major governments like the U.S. do.' },
   { theme: 'money', card: 'City while young. Suburbs later.',
     head: 'Live in the city while you’re young to network. Then as you get older move to the outer suburbs to save money and reduce debt.' },

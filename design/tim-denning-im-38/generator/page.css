@@ -65,7 +65,7 @@ body { margin: 0; background: var(--table); }
 /* type */
 .label { font-stretch: 75%; font-weight: 650; font-size: 12.5px; line-height: 1.3; letter-spacing: .1em; text-transform: uppercase; }
 .h2 { font-stretch: 112%; font-weight: 800; font-size: clamp(28px, 3.6vw, 44px); line-height: 1.02; letter-spacing: -.012em; text-wrap: balance; }
-.note { font-stretch: 87%; font-size: 14.5px; line-height: 1.45; font-style: italic; }
+.note { font-stretch: 87%; font-size: 14.5px; line-height: 1.45; font-style: italic; text-wrap: pretty; }
 .op { color: var(--op); mix-blend-mode: multiply; }
 .mb { mix-blend-mode: multiply; }
 
@@ -146,7 +146,7 @@ body { margin: 0; background: var(--table); }
 .t-glyphs .pic { width: 22px; height: 22px; color: var(--ink); }
 .t-n { font-stretch: 75%; font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; }
 .tally .note { margin-top: 18px; }
-.setter { padding-top: 4px; display: grid; gap: 14px; font-size: 17px; line-height: 1.5; max-width: 34em; }
+.setter { text-wrap: pretty; padding-top: 4px; display: grid; gap: 14px; font-size: 17px; line-height: 1.5; max-width: 34em; }
 .setter .label { margin-bottom: 4px; }
 
 /* ---------- rough ground ---------- */
@@ -159,6 +159,8 @@ body { margin: 0; background: var(--table); }
 .scars li { color: var(--op-ink); font-weight: 600; font-size: 19px; line-height: 1.35; display: flex; align-items: baseline; gap: 10px; transform: translateY(var(--dy)); }
 .scars li::before { content: ""; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--ink); flex: none; position: relative; top: -1px; }
 .rough .note { margin-top: 30px; }
+.rough .leg-run { display: none; }
+@media (max-width: 1150px) { .rough .leg-end { display: none; } .rough .leg-run { display: inline; } }
 
 /* ---------- route choice ---------- */
 .route { margin-top: 92px; }
@@ -166,7 +168,7 @@ body { margin: 0; background: var(--table); }
 .route-fig { margin-top: 30px; margin-inline: calc(-1 * var(--bleed)); }
 .route-draw svg { display: block; width: 100%; height: auto; }
 .route-draw .rc-m { display: none; }
-.route-fig figcaption { margin-top: 10px; padding-inline: var(--bleed); }
+.route-fig figcaption { text-wrap: pretty; margin-top: 10px; padding-inline: var(--bleed); }
 .rc .iso { fill: none; stroke: var(--ink); stroke-width: 1.4; stroke-dasharray: 2 5; stroke-linecap: round; }
 .rc .iso-tag rect { fill: var(--sheet); stroke: var(--ink); stroke-width: 1.2; }
 .rc .iso-tag text { font: 650 12px/1 var(--f-sans); font-stretch: 75%; letter-spacing: .1em; fill: var(--ink); }
@@ -180,7 +182,7 @@ body { margin: 0; background: var(--table); }
 .rc-m .rc-label .rc-k { font-size: 11.5px; }
 .route-quote { margin-top: 36px; max-width: 760px; color: var(--op-ink); }
 .rq-head { font-stretch: 100%; font-weight: 700; font-size: clamp(23px, 2.6vw, 31px); line-height: 1.22; text-indent: -.42em; text-wrap: pretty; }
-.rq-body { margin-top: 14px; font-size: 19px; line-height: 1.5; max-width: 40em; }
+.rq-body { text-wrap: pretty; margin-top: 14px; font-size: 19px; line-height: 1.5; max-width: 40em; }
 
 /* ---------- course ---------- */
 .course { margin-top: 110px; display: grid; grid-template-columns: minmax(0, 1fr) var(--card); gap: 0 var(--gap); align-items: start; }
@@ -213,7 +215,8 @@ body { margin: 0; background: var(--table); }
 .ctl.featured .num { top: calc(72px + 4px); }
 .ctl.featured.pre .ring { top: calc(72px + 6px + 13.5px - var(--ring) / 2); }
 .ctl.featured.pre .num { top: calc(72px - 4px); }
-.feat { font-stretch: 112%; font-weight: 880; font-size: clamp(40px, 5.2vw, 66px); line-height: .96; letter-spacing: -.022em; text-wrap: balance; max-width: 11.5em; margin-block: 0 22px; }
+.ctl.featured .ctl-text { container-type: inline-size; justify-self: stretch; }
+.feat { font-stretch: 112%; font-weight: 880; font-size: clamp(40px, 5.2vw, 66px); font-size: min(clamp(40px, 5.2vw, 66px), 9.2cqi); line-height: .96; letter-spacing: -.022em; text-wrap: balance; max-width: 11.5em; margin-block: 0 22px; }
 .ctl.featured .head, .ctl.featured .body, .ctl.featured .note { text-shadow: var(--halo); max-width: 36em; }
 .ctl.featured .head { font-weight: 700; }
 .ctl.featured .head + .feat { margin-top: 18px; }
@@ -259,7 +262,7 @@ body { margin: 0; background: var(--table); }
 .card tr.here > * { background: var(--op-tint); }
 .card .note { margin-top: 10px; font-size: 13px; }
 @media (min-width: 1101px) and (max-height: 900px) {
-  .card td, .card th { height: 21px; }
+  .card td, .card th { height: 23px; }
   .card table { font-size: 12.8px; margin-top: 6px; }
   .card td.ct a { padding-block: 2px; }
 }
@@ -291,6 +294,7 @@ body { margin: 0; background: var(--table); }
   .route-draw .rc-m { display: block; max-width: 480px; margin-inline: auto; }
 }
 @media (max-width: 900px) {
+  .hero .t-road-label { display: none; }
   .hero-grid { grid-template-columns: minmax(0, 1fr); }
   .coursebox { max-width: 380px; }
   .overview { grid-template-columns: minmax(0, 1fr); gap: 56px; }
@@ -303,8 +307,6 @@ body { margin: 0; background: var(--table); }
   :root { --pad: 18px; --neat: 8px; --track: 58px; --ring: 30px; }
   .table { padding: 0; }
   .sheet { padding-block: 34px 40px; box-shadow: none; font-size: 16.5px; background-image: repeating-linear-gradient(101deg, transparent 0 119px, var(--north) 119px 120px); }
-  .t-d { display: none !important; }
-  .t-m { display: block !important; }
   .hero { padding-bottom: 40px; }
   .hero .terrain { top: calc(-1 * (34px - var(--neat))); }
   .hero-top { flex-direction: column; gap: 4px; font-size: 11.5px; }
@@ -354,6 +356,12 @@ body { margin: 0; background: var(--table); }
   .card { margin-top: 40px; padding: 12px 10px 10px; }
   .colourbar span { width: calc(100% / 5); }
   .colourbar span:nth-child(5) i { border-right-width: 1px; }
+}
+
+/* phone drawings only where they crop at the sides; wider phones keep the wide drawings so nothing is cut flat top or bottom */
+@media (max-width: 430px) {
+  .t-d { display: none !important; }
+  .t-m { display: block !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {

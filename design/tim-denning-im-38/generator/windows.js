@@ -33,33 +33,33 @@ function hero() {
     veg: { level: 0.66, bias: sum(bump(1150, 230, 120, 200, 0.32), bump(1080, 600, 160, 80, 0.2), clear(0, 60, 860, 360)) },
     open: { level: 0.72, bias: sum(bump(860, 560, 150, 60, 0.36), clear(0, 40, 860, 380, 0.8), clear(0, 420, 760, 640, 0.5)) },
     stream: { pts: [[300, -10], [330, 110], [290, 250], [210, 380], [120, 470], [30, 520], [-10, 540]] },
-    boulders: { n: 40, dots: true }, avoid: any(box(0, 440, 760, 640), box(0, 40, 860, 330), box(0, 330, 640, 500)),
+    boulders: { n: 40, dots: true }, avoid: any(box(0, 0, 1192, 60), box(0, 440, 840, 640), box(0, 40, 860, 330), box(0, 330, 640, 500)),
     cliff: { pts: [[720, 400], [770, 424], [830, 430]] },
     trail: { pts: [[1200, 280], [1080, 310], [980, 350], [900, 420], [860, 520], [880, 640]] },
-    road: { pts: [[700, 640], [820, 560], [940, 480], [1060, 410], [1200, 350]], label: 'THE CONVENTIONAL PATH', labelAt: '54%' } });
+    road: { pts: [[700, 640], [820, 560], [940, 480], [1060, 410], [1200, 350]], label: 'THE CONVENTIONAL PATH', labelAt: '30%' } });
   const m = terrain({ id: 'hero-m', W: MW, H: 900, seed: '38-hero-m', cell: 4, taperY: 0.06, relief: 0.4, interval: 0.1, freq: 1 / 220,
     hills: [g(300, 150, 120, 85, 1.0, -0.4), g(90, 800, 90, 60, 0.4), g(360, 690, 60, 50, 0.3)],
     veg: { level: 0.66, bias: sum(bump(430, 420, 80, 120, 0.3), bump(40, 850, 120, 70, 0.25), clear(0, 40, 420, 260)) },
     open: { level: 0.74, bias: sum(bump(330, 840, 100, 60, 0.3), clear(0, 40, 420, 300, 0.8), clear(0, 560, 420, 760, 0.6)) },
     stream: { pts: [[-10, 300], [80, 340], [140, 420], [170, 520], [150, 600], [100, 680], [60, 780], [-10, 840]] },
-    boulders: { n: 24, dots: true }, avoid: any(box(0, 0, 420, 300), box(0, 590, 420, 770)) });
+  });
   return svg(DW, 620, 't t-d', d.svg, 'xMidYMin slice') + svg(MW, 900, 't t-m', m.svg, 'xMinYMin slice');
 }
 
 function rough() {
   // scars sit over light ground on the left; the boulder field and the cliff carry the right
-  const leg = (x1, y1, x2, y2, r) => `<path class="op-stroke" d="M${x1} ${y1}L${x2} ${y2}"/><circle class="op-stroke" cx="${x2}" cy="${y2}" r="${r}"/>`;
+  const leg = (x1, y1, x2, y2, r) => { const L = Math.hypot(x2 - x1, y2 - y1), k = (L - r - 5) / L; return `<path class="op-stroke" d="M${x1} ${y1}L${r1(x1 + (x2 - x1) * k)} ${r1(y1 + (y2 - y1) * k)}"/><circle class="op-stroke" cx="${x2}" cy="${y2}" r="${r}"/>`; };
   const d = terrain({ id: 'rough-d', W: DW, H: 430, seed: '38-rough', cell: 6, taperY: 0.16, relief: 0.45, interval: 0.11,
     hills: [g(300, 250, 160, 90, 0.5), g(940, 190, 170, 90, 0.75, 0.3)],
     veg: { level: 0.58, max: 2, tint: -0.06, bias: sum(bump(620, 225, 420, 130, 0.5), bump(1150, 90, 100, 70, -0.3)) },
-    boulders: { n: 120, anywhere: true, field: (x, y) => x > 780 || y > 360 },
+    boulders: { n: 90, anywhere: true, field: (x, y) => x > 920 && Math.hypot(x - 1010, y - 84) > 40 },
     cliff: { pts: [[800, 330], [860, 350], [930, 354], [990, 340]] } });
   const m = terrain({ id: 'rough-m', W: MW, H: 760, seed: '38-rough-m', cell: 5, taperY: 0.12, relief: 0.45, interval: 0.11,
     hills: [g(330, 380, 100, 140, 0.55)],
     veg: { level: 0.58, max: 2, tint: -0.06, bias: bump(220, 430, 230, 260, 0.5) },
-    boulders: { n: 46, anywhere: true, field: (x, y) => x > 360 || y > 690 },
+    boulders: { n: 30, anywhere: true, field: (x, y) => y > 716 || (x > 300 && y < 160 && Math.hypot(x - 340, y - 132) > 34) },
     cliff: { pts: [[250, 708], [310, 722], [380, 718]] } });
-  return svg(DW, 430, 't t-d', d.svg + leg(60, 395, 1010, 84, 16)) + svg(MW, 760, 't t-m', m.svg + leg(30, 735, 388, 120, 12));
+  return svg(DW, 430, 't t-d', d.svg + `<g class="leg-end">${leg(60, 395, 1010, 84, 16)}</g><path class="op-stroke leg-run" d="M60 395L1300 -11"/>`) + svg(MW, 760, 't t-m', m.svg + leg(30, 735, 340, 132, 12));
 }
 
 const STRIP_H = { path: 190, mind: 140, work: 210, money: 150, body: 230, people: 160 };
@@ -68,7 +68,7 @@ function strip(key, seed, opts) {
   const d = terrain({ id: `${seed}-d`, W: DW, H, seed, cell: 5, taperY: 0.26, relief: 0.62, interval: 0.11, freq: 1 / 170,
     hills: opts.hills || [], veg: opts.veg === false ? null : { level: opts.veg ?? 0.64, bias: opts.vegBias },
     open: opts.open === false ? null : { level: opts.open ?? 0.72, bias: opts.openBias },
-    boulders: { n: opts.rocks ?? 12, dots: true }, road: opts.road, stream: opts.stream, marsh: opts.marsh, trail: opts.trail,
+    boulders: { n: opts.rocks ?? 12, dots: true }, avoid: (x, y) => Math.abs(y - H / 2) < 24 && x < 460, road: opts.road, stream: opts.stream, marsh: opts.marsh, trail: opts.trail,
     cliff: opts.cliff, minContour: 160 });
   const hm = Math.round(H * 0.8);
   const sy = hm / H;
@@ -76,10 +76,10 @@ function strip(key, seed, opts) {
   const m = terrain({ id: `${seed}-m`, W: MW, H: hm, seed: seed + '-m', cell: 4, taperY: 0.26, relief: 0.62, interval: 0.11, freq: 1 / 120,
     hills: (opts.hills || []).map(h => ({ ...h, x: h.x * MW / DW * 1.6 - 120, y: h.y * sy, sx: h.sx * 0.6, sy: h.sy * sy })),
     veg: opts.veg === false ? null : { level: opts.veg ?? 0.64 }, open: opts.open === false ? null : { level: opts.open ?? 0.72 },
-    boulders: { n: 6, dots: true }, road: opts.road && { ...scalePts(opts.road), label: undefined }, stream: scalePts(opts.stream),
-    marsh: opts.marsh && { x: opts.marsh.x * MW / DW * 1.6 - 120, y: opts.marsh.y * sy, w: opts.marsh.w * 0.6, h: opts.marsh.h * sy },
+    boulders: { n: 6, dots: true }, avoid: (x, y) => Math.abs(y - hm / 2) < 22, road: opts.road && { ...scalePts(opts.road), label: undefined, ...(opts.m?.road || {}) }, stream: opts.m?.stream || scalePts(opts.stream),
+    marsh: opts.m?.marsh || (opts.marsh && { x: opts.marsh.x * MW / DW * 1.6 - 120, y: opts.marsh.y * sy, w: opts.marsh.w * 0.6, h: opts.marsh.h * sy }),
     cliff: scalePts(opts.cliff), minContour: 120 });
-  return { h: H, hm, svg: svg(DW, H, 't t-d', d.svg) + svg(MW, hm, 't t-m', m.svg) };
+  return { h: H, hm, svg: svg(DW, H, 't t-d', d.svg, 'xMinYMid slice') + svg(MW, hm, 't t-m', m.svg) };
 }
 
 function strips() {
@@ -88,15 +88,16 @@ function strips() {
     path: strip('path', '38-strip-path', { hills: [g(260, 100, 80, 40, 0.5), g(980, 120, 110, 44, 0.55)],
       road: { pts: [[-10, 186], [220, 170], [480, 140], [720, 104], [960, 60], [1200, 24]], label: 'THE CONVENTIONAL PATH', labelAt: '42%' } }),
     mind: strip('mind', '38-strip-mind', { hills: [g(700, 70, 90, 34, 0.5)], open: false, veg: 0.68,
-      stream: { pts: [[-10, 30], [220, 56], [430, 50], [700, 100], [980, 90], [1200, 120]] }, marsh: { x: 440, y: 44, w: 220, h: 70 } }),
+      stream: { pts: [[-10, 30], [220, 56], [430, 50], [700, 100], [980, 90], [1200, 120]] }, marsh: { x: 440, y: 44, w: 220, h: 70 },
+      m: { stream: { pts: [[-10, 16], [140, 24], [300, 18], [430, 28]] }, marsh: { x: 230, y: 76, w: 150, h: 30 } } }),
     work: strip('work', '38-strip-work', { hills: [g(260, 110, 100, 60, 0.75), g(940, 90, 120, 50, 0.6)], veg: 0.6,
       cliff: { pts: [[200, 150], [260, 162], [330, 160]] }, rocks: 22,
-      trail: { pts: [[1200, 30], [1000, 70], [820, 120], [620, 140], [420, 190], [300, 214]] } }),
+      trail: { pts: [[1200, 30], [1000, 70], [820, 120], [620, 140], [420, 180], [200, 192], [-10, 196]] } }),
     money: strip('money', '38-strip-money', { hills: [g(620, 80, 140, 40, 0.6)], open: 0.6, veg: 0.74, openBias: bump(820, 70, 260, 50, 0.15) }),
     body: strip('body', '38-strip-body', { hills: [g(820, 110, 120, 60, 0.7), g(300, 150, 80, 40, 0.45)], veg: 0.54, open: false,
-      stream: { pts: [[1200, 10], [1010, 60], [880, 150], [700, 190], [460, 200], [200, 230], [-10, 236]] } }),
+      stream: { pts: [[1200, 10], [1010, 60], [880, 150], [700, 190], [460, 196], [200, 206], [-10, 210]] } }),
     people: strip('people', '38-strip-people', { hills: [g(360, 80, 100, 40, 0.5)], open: 0.66, veg: 0.66,
-      road: { pts: [[-10, 150], [240, 120], [520, 100], [820, 60], [1200, 10]] } }),
+      road: { pts: [[-10, 150], [240, 120], [520, 100], [820, 60], [1200, 10]] }, m: { road: { pts: [[-10, 120], [160, 110], [300, 102], [430, 90]] } } }),
   };
 }
 
@@ -104,7 +105,7 @@ function featured(seed, i) {
   // the quote sits over the left two thirds, so fills stay to the right; each window gets its own feature
   const textClear = clear(0, 0, 820, 400, 0.6);
   const feats = [
-    { hills: [g(980, 200, 140, 90, 0.7)], stream: { pts: [[1200, 80], [1100, 120], [1010, 200], [930, 270], [900, 300]] }, pond: [890, 316, 46, 26] },
+    { hills: [g(980, 200, 140, 90, 0.7)], stream: { pts: [[1200, 80], [1110, 130], [1050, 210], [1025, 280], [1016, 300]] }, pond: [1010, 322, 46, 26] },
     { hills: [g(520, 180, 260, 120, 0.75, 0.2), g(1020, 260, 90, 60, 0.4)], openBias: bump(1040, 190, 140, 90, 0.4) },
     { hills: [g(900, 180, 160, 100, 0.85, -0.3)], cliff: { pts: [[840, 300], [900, 316], [970, 312], [1030, 296]] } },
     { hills: [g(420, 200, 220, 110, 0.7, 0.3), g(1000, 150, 120, 70, 0.5)], stream: { pts: [[1200, 330], [1060, 300], [960, 360], [880, 410]] } },
@@ -113,7 +114,7 @@ function featured(seed, i) {
     hills: feats.hills, veg: { level: 0.66, max: 2, bias: sum(bump(1100, 200, 160, 160, 0.14), textClear) },
     open: feats.openBias ? { level: 0.72, bias: sum(feats.openBias, textClear) } : null,
     cliff: feats.cliff, stream: feats.stream, pond: feats.pond && pond('fp' + i, ...feats.pond, seed + ':pond'),
-    boulders: { n: 16, dots: true }, avoid: box(0, 0, 820, 400), minContour: 260 });
+    boulders: { n: 16, dots: true }, avoid: box(0, 0, 1000, 400), minContour: 260 });
   const m = terrain({ id: `${seed}-m`, W: MW, H: 460, seed: seed + '-m', cell: 4, taperY: 0.26, relief: 0.4, interval: 0.13, freq: 1 / 160,
     hills: [g(360, 200 + (i % 2 ? 60 : -20), 90, 90, 0.6, 0.3 * i)], minContour: 220 });
   return svg(DW, 400, 't t-d', d.svg) + svg(MW, 460, 't t-m', m.svg);
@@ -127,14 +128,18 @@ function finish() {
     boulders: { n: 12, dots: true }, avoid: box(0, 0, 760, 330), minContour: 240 });
   const m = terrain({ id: 'finish-m', W: MW, H: 400, seed: '38-finish-m', cell: 4, taperY: 0.24, relief: 0.45, interval: 0.1,
     hills: [g(320, 120, 100, 70, 0.6)], veg: { level: 0.7, bias: clear(0, 60, 420, 400, 0.5) },
-    pond: pond('fm', 340, 330, 70, 40, '38-pond-m'), boulders: { n: 4, dots: true }, avoid: box(0, 40, 420, 300), minContour: 140 });
+    pond: pond('fm', 350, 372, 62, 22, '38-pond-m'), minContour: 140 });
   return svg(DW, 330, 't t-d', d.svg) + svg(MW, 400, 't t-m', m.svg);
 }
 
 // The route-choice drawing: the straight line over the hill vs. the road around it.
 function routeChoice() {
   function draw({ W, H, id, seed, cell, hill, start, end, road, iso35, small }) {
-    const t = terrain({ id, W, H, seed, cell, taperY: 0.08, taperX: 0.05, relief: 0.38, interval: 0.09, freq: 1 / (small ? 170 : 260),
+    // keep rocks out of the AGE 35 circle and from under its label
+    const P0 = [start[0] + (end[0] - start[0]) * iso35.op, start[1] + (end[1] - start[1]) * iso35.op];
+    const nearP = (x, y) => Math.hypot(x - P0[0], y - P0[1]) < 34
+      || (small ? x > P0[0] - 190 && x < P0[0] - 14 && y > P0[1] - 66 && y < P0[1] - 18 : x > P0[0] + 16 && x < P0[0] + 230 && y > P0[1] - 20 && y < P0[1] + 32);
+    const t = terrain({ id, W, H, seed, cell, avoid: nearP, taperY: 0.08, taperX: 0.05, relief: 0.38, interval: 0.09, freq: 1 / (small ? 170 : 260),
       hills: hill, veg: { level: 0.76, bias: (x, y) => gauss(x, y, { ...hill[0], sx: hill[0].sx * 0.55, sy: hill[0].sy * 0.6, x: hill[0].x - hill[0].sx * 0.25, a: 0.4 }) },
       open: { level: 0.8, bias: (x, y) => gauss(x, y, { x: start[0] + (small ? 60 : 130), y: start[1] - 20, sx: small ? 80 : 150, sy: small ? 50 : 60, a: 0.36 }) },
       boulders: { n: small ? 14 : 30, dots: true, field: (x, y) => Math.hypot(x - hill[0].x, y - hill[0].y) < hill[0].sx * 1.6 },
@@ -178,13 +183,13 @@ function routeChoice() {
     if (!small) {
       labels = lbl(P[0] + 26, P[1] + 2, ['TOOK RISKS · AT 35', 'Steep, rough, direct'])
         + lbl(at.x + ringR + 14, at.y - 52, ['PLAYED SAFE · AT 35', 'Flat, crowded, the long way round'])
-        + lbl(at.x - ringR - 150, at.y - 58, ['…regrets which ages you faster.'], 'end', 'rc-op')
+        + lbl(at.x - ringR - 12, at.y - 50, ['“regrets which ages you faster”'], 'end', 'rc-op')
         + lbl(start[0] - 4, start[1] + 44, ['START · YOUR 20s'])
         + lbl(end[0] - 40, end[1] + 6, ['38 · TIM'], 'end');
     } else {
       labels = lbl(P[0] - 24, P[1] - 34, ['TOOK RISKS · AT 35', 'Steep, rough, direct'], 'end')
         + lbl(at.x - ringR - 12, at.y - 66, ['PLAYED SAFE · AT 35', 'Flat, crowded,', 'the long way round'], 'end')
-        + lbl(at.x - ringR - 12, at.y + 4, ['…regrets which', 'ages you faster.'], 'end', 'rc-op')
+        + lbl(at.x - ringR - 12, at.y + 4, ['“regrets which', 'ages you faster”'], 'end', 'rc-op')
         + lbl(start[0] + 30, start[1] + 8, ['START · YOUR 20s'])
         + lbl(end[0] - 36, end[1] + 6, ['38 · TIM'], 'end');
     }

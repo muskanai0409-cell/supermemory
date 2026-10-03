@@ -11,7 +11,7 @@ orienteering map.
 | `standalone.html` | The same page wrapped in a full HTML document, so you can open it locally in a browser. |
 | `poster.png` | The whole page as one tall image (1248 px wide). |
 | `share-card.png` | 4:5 share card (2160 × 2700) listing every lesson on one card. |
-| `twitter/` | The simple set for X: `1-big-idea.png` (the core claim, one drawing) and `2-all-28-lessons.png` (cheat sheet), plus ready-to-post copy in `POST.md`. |
+| `twitter/` | The simple version for X: `im-38-10-lessons.png`, one image with ten lessons in big type, plus ready-to-post copy in `POST.md`. `earlier/` keeps the previous two-image thread. |
 | `generator/` | The generator: terrain, page assembly and content. |
 
 ## How to read it
@@ -51,7 +51,8 @@ cd generator
 npm install          # d3-contour, simplex-noise, alea
 node build.js        # writes out/index.html
 node card.js         # writes out/card.html (share card source)
-node tw.js           # writes out/tw-cover.html and out/tw-sheet.html (Twitter set)
+node tw.js           # writes out/tw-cover.html and out/tw-sheet.html (earlier Twitter set)
+node tw3.js          # writes out/tw-final.html (final one-image Twitter version)
 ```
 
 Terrain is generated at build time from fixed seeds, so every build is identical.

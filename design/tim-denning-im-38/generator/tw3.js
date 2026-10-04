@@ -24,7 +24,7 @@ body { margin: 0; background: var(--paper); }
 .card { position: relative; width: 1080px; height: 1350px; overflow: hidden; background: var(--paper); color: var(--ink); font-family: var(--f); -webkit-font-smoothing: antialiased; font-kerning: normal; padding: 70px 72px 60px; display: flex; flex-direction: column; }
 .kick { font-stretch: 75%; font-weight: 700; font-size: 30px; letter-spacing: .08em; text-transform: uppercase; }
 h1 { margin: 24px 0 0; font-stretch: 108%; font-weight: 900; font-size: 88px; line-height: .94; letter-spacing: -.03em; color: var(--op); white-space: nowrap; }
-ul { list-style: none; margin: 58px 0 0; padding: 0; display: grid; gap: 30px; }
+ul { list-style: none; margin: 64px 0 0; padding: 0; display: grid; gap: 44px; }
 li { position: relative; padding-left: 50px; font-stretch: 94%; font-size: 40px; line-height: 1.14; letter-spacing: -.008em; text-wrap: pretty; }
 li::before { content: ""; position: absolute; left: 0; top: .24em; width: 26px; height: 26px; border: 3.5px solid var(--op); border-radius: 50%; }
 li b { font-weight: 700; }
@@ -35,7 +35,6 @@ li span { font-weight: 400; color: var(--mute); }
   <div class="kick">10 lessons from Tim Denning’s essay</div>
   <h1>What to actually do<br>in your 20s and 30s.</h1>
   <ul>${TEN.map(([a, b]) => `<li><b>${a}</b> <span>${b}</span></li>`).join('')}</ul>
-  <p class="foot">Paraphrased from Tim Denning’s X Article, Jan 2026.</p>
 </div>`;
 fs.writeFileSync(path.join(__dirname, 'out', 'tw-final.html'), html);
 console.log('ok');

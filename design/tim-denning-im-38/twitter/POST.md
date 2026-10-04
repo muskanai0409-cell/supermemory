@@ -9,5 +9,5 @@ Final: one image, `what-to-do-in-your-20s-and-30s.png` (2160 × 2700, 4:5). It s
 
 Notes
 - The first three lessons are his first three, in his order. The other seven are a selection, so the image uses bullets, not numbers.
-- Lines are paraphrased, and the image says so. Several follow-ups are his own words.
+- Lines are paraphrased; several follow-ups are his own words. The top label credits him, and the post text tags and links him.
 - `earlier/` holds previous versions (the "I'M 38." headline version and the two-image thread), kept for reference.

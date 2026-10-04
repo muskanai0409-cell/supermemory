@@ -23,10 +23,9 @@ const html = `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?fam
 body { margin: 0; background: var(--paper); }
 .card { position: relative; width: 1080px; height: 1350px; overflow: hidden; background: var(--paper); color: var(--ink); font-family: var(--f); -webkit-font-smoothing: antialiased; font-kerning: normal; padding: 70px 72px 60px; display: flex; flex-direction: column; }
 .kick { font-stretch: 75%; font-weight: 700; font-size: 30px; letter-spacing: .08em; text-transform: uppercase; }
-h1 { margin: 22px 0 0; font-stretch: 125%; font-weight: 900; font-size: 152px; line-height: .84; letter-spacing: -.035em; color: var(--op); }
-.sub { margin: 20px 0 0; font-weight: 650; font-size: 42px; line-height: 1.1; letter-spacing: -.01em; }
-ul { list-style: none; margin: 54px 0 0; padding: 0; display: grid; gap: 30px; }
-li { position: relative; padding-left: 50px; font-stretch: 94%; font-size: 39px; line-height: 1.14; letter-spacing: -.008em; text-wrap: pretty; }
+h1 { margin: 24px 0 0; font-stretch: 108%; font-weight: 900; font-size: 88px; line-height: .94; letter-spacing: -.03em; color: var(--op); white-space: nowrap; }
+ul { list-style: none; margin: 58px 0 0; padding: 0; display: grid; gap: 30px; }
+li { position: relative; padding-left: 50px; font-stretch: 94%; font-size: 40px; line-height: 1.14; letter-spacing: -.008em; text-wrap: pretty; }
 li::before { content: ""; position: absolute; left: 0; top: .24em; width: 26px; height: 26px; border: 3.5px solid var(--op); border-radius: 50%; }
 li b { font-weight: 700; }
 li span { font-weight: 400; color: var(--mute); }
@@ -34,8 +33,7 @@ li span { font-weight: 400; color: var(--mute); }
 </style>
 <div class="card">
   <div class="kick">10 lessons from Tim Denning’s essay</div>
-  <h1>I’M 38.</h1>
-  <p class="sub">If You’re in Your 20’s or 30’s, Read This.</p>
+  <h1>What to actually do<br>in your 20s.</h1>
   <ul>${TEN.map(([a, b]) => `<li><b>${a}</b> <span>${b}</span></li>`).join('')}</ul>
   <p class="foot">Paraphrased from Tim Denning’s X Article, Jan 2026.</p>
 </div>`;

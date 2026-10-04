@@ -11,7 +11,7 @@ orienteering map.
 | `standalone.html` | The same page wrapped in a full HTML document, so you can open it locally in a browser. |
 | `poster.png` | The whole page as one tall image (1248 px wide). |
 | `share-card.png` | 4:5 share card (2160 × 2700) listing every lesson on one card. |
-| `twitter/` | The simple version for X: `im-38-10-lessons.png`, one image with ten lessons in big type, plus ready-to-post copy in `POST.md`. `earlier/` keeps the previous two-image thread. |
+| `twitter/` | The simple version for X: `what-to-do-in-your-20s.png`, one image with ten lessons in big type, plus ready-to-post copy in `POST.md`. `earlier/` keeps previous versions. |
 | `generator/` | The generator: terrain, page assembly and content. |
 
 ## How to read it

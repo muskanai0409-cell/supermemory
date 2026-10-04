@@ -33,7 +33,7 @@ li span { font-weight: 400; color: var(--mute); }
 </style>
 <div class="card">
   <div class="kick">10 lessons from Tim Denning’s essay</div>
-  <h1>What to actually do<br>in your 20s.</h1>
+  <h1>What to actually do<br>in your 20s and 30s.</h1>
   <ul>${TEN.map(([a, b]) => `<li><b>${a}</b> <span>${b}</span></li>`).join('')}</ul>
   <p class="foot">Paraphrased from Tim Denning’s X Article, Jan 2026.</p>
 </div>`;

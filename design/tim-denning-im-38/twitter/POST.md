@@ -1,6 +1,6 @@
 # Ready-to-post for X
 
-Final: one image, `what-to-do-in-your-20s.png` (2160 × 2700, 4:5). It shows uncropped in the mobile feed.
+Final: one image, `what-to-do-in-your-20s-and-30s.png` (2160 × 2700, 4:5). It shows uncropped in the mobile feed.
 
 > Tim Denning, at 38: “When you turn 35 you’ll see the difference between those who took risks and those who didn’t.”
 >

@@ -19,7 +19,7 @@ const ALL = [
   'Take risks. By 35 it shows.', 'Skip the conventional path.', 'Burn your parents’ plan.', 'More hard things, more success.',
   'Chase obsession.', 'Set psychopath-level standards.', 'Hear disagreement calmly.', 'Turn off news and politics.', 'Visit a retirement home.',
   'Learn how money works.', 'Money is a resource for freedom.', 'Read finance books. Invest early.', 'Read <i>The Bitcoin Standard</i>.', 'City while young. Suburbs later.',
-  'Get off the corporate ladder.', 'Corporations only pretend to care.', 'Learn skills people need.', 'Business is psychology.', 'Write online for opportunities.', 'Build online under a nickname.', 'Flow beats productivity.',
+  'Get off the corporate ladder.', 'Corporations pretend to care.', 'Learn skills people need.', 'Business is psychology.', 'Write online for opportunities.', 'Build online under a nickname.', 'Flow beats productivity.',
   'Keep dopamine in check.', 'Games become a time suck.', 'Exercise daily, outdoors.', 'Give up alcohol.',
   'Kids are where freedom begins.', 'Outgrow friends, gently.', 'See your parents more.',
 ];
@@ -28,17 +28,17 @@ const ALL = [
 function plainList() {
   const col = (a, off) => a.map((t, i) => `<li><b>${off + i + 1}</b><span>${t}</span></li>`).join('');
   return `${FONTS}<style>${BASE}
-.list { margin-top: 48px; display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; }
-ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 15px; }
-li { display: grid; grid-template-columns: 44px 1fr; align-items: baseline; font-stretch: 90%; font-size: 29px; font-weight: 500; line-height: 1.15; }
+.kick { font-size: 30px; letter-spacing: .08em; }
+.head { margin: 24px 0 0; font-stretch: 108%; font-weight: 900; font-size: 88px; line-height: .94; letter-spacing: -.03em; color: var(--op); white-space: nowrap; }
+.list { margin-top: 62px; display: grid; grid-template-columns: 1fr 1fr; gap: 0 36px; }
+ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 29px; }
+li { display: grid; grid-template-columns: 44px 1fr; align-items: baseline; font-stretch: 88%; font-size: 29.5px; font-weight: 500; line-height: 1.15; }
 li b { color: var(--op-ink); font-stretch: 75%; font-weight: 800; font-size: 24px; font-variant-numeric: tabular-nums; }
 </style>
 <div class="card">
-  <div class="kick">Tim Denning’s 28 lessons</div>
-  <h1 class="big">I’M 38.</h1>
-  <p class="sub">If You’re in Your 20’s or 30’s, Read This.</p>
+  <div class="kick">28 lessons from Tim Denning’s essay</div>
+  <h1 class="head">What to actually do<br>in your 20s and 30s.</h1>
   <div class="list"><ol>${col(ALL.slice(0, 14), 0)}</ol><ol>${col(ALL.slice(14), 14)}</ol></div>
-  <p class="foot">Summary of Tim Denning’s essay (X Article, Jan 2026). Wording is mine, not his.</p>
 </div>`;
 }
 

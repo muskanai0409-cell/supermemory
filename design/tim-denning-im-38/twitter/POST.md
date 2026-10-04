@@ -2,6 +2,8 @@
 
 Final: one image, `what-to-do-in-your-20s-and-30s.png` (2160 × 2700, 4:5). It shows uncropped in the mobile feed.
 
+Alternative: `what-to-do-in-your-20s-and-30s-all-28.png`, the same headline with all 28 lessons as a plain numbered list. Use it as a reply under the main image, or on its own for a bookmark-style post.
+
 > Tim Denning, at 38: “When you turn 35 you’ll see the difference between those who took risks and those who didn’t.”
 >
 > 10 lessons from his essay ↓
